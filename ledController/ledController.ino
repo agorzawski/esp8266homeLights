@@ -12,8 +12,9 @@ ESP8266WebServer server(80);
 
 String webPage = "";
 
-int gpio0_pin = 0;
-int gpio2_pin = 2;
+int dout1 = 4;
+int dout2 = 5;
+int doutled = 2;
 
 void setup(void){
   webPage += "<h1>Oswietlenie ogrod: </h1>";
@@ -22,10 +23,12 @@ void setup(void){
   webPage += "<p>Wszystkie     <a href=\"allOn\">    <button>ON</button></a>&nbsp;<a href=\"allOff\">    <button>OFF</button></a></p>";
   
   // preparing GPIOs
-  pinMode(gpio0_pin, OUTPUT);
-  digitalWrite(gpio0_pin, LOW);
-  pinMode(gpio2_pin, OUTPUT);
-  digitalWrite(gpio2_pin, LOW);
+  pinMode(dout1, OUTPUT);
+  digitalWrite(dout1, LOW);
+  pinMode(dout2, OUTPUT);
+  digitalWrite(dout2, LOW);
+  pinMode(doutled, OUTPUT);
+  digitalWrite(doutled, LOW);
 
   uint8_t macAddress[6];
   WiFi.macAddress(macAddress);
@@ -62,37 +65,39 @@ void setup(void){
   });
   server.on("/socket1On", [](){
     server.send(200, "text/html", webPage);
-    digitalWrite(gpio0_pin, HIGH);
+    digitalWrite(dout1, HIGH);
     delay(1000);
+    blinkStatusLED(200,200);
   });
   server.on("/socket1Off", [](){
     server.send(200, "text/html", webPage);
-    digitalWrite(gpio0_pin, LOW);
+    digitalWrite(dout1, LOW);
     delay(1000); 
   });
   server.on("/socket2On", [](){
     server.send(200, "text/html", webPage);
-    digitalWrite(gpio2_pin, HIGH);
+    digitalWrite(dout2, HIGH);
     delay(1000);
+    blinkStatusLED(200,200);
   });
   server.on("/socket2Off", [](){
     server.send(200, "text/html", webPage);
-    digitalWrite(gpio2_pin, LOW);
+    digitalWrite(dout2, LOW);
     delay(1000); 
   });
 
   server.on("/allOn", [](){
     server.send(200, "text/html", webPage);
-    digitalWrite(gpio0_pin, HIGH);
-    digitalWrite(gpio2_pin, HIGH);
+    digitalWrite(dout1, HIGH);
+    digitalWrite(dout2, HIGH);
     Serial.println("All ON...");
     delay(1000);
   });
 
    server.on("/allOff", [](){
     server.send(200, "text/html", webPage);
-    digitalWrite(gpio0_pin, LOW);
-    digitalWrite(gpio2_pin, LOW);
+    digitalWrite(dout1, LOW);
+    digitalWrite(dout2, LOW);
     Serial.println("All OFF...");
     delay(1000);
   });
@@ -100,7 +105,15 @@ void setup(void){
   server.begin();
   Serial.println("HTTP server started");
 }
+
+void blinkStatusLED(int high, int low){
+    digitalWrite(doutled, HIGH);
+    delay(high);
+    digitalWrite(doutled, LOW);
+    delay(low);
+}
  
 void loop(void){
+  blinkStatusLED(1000,1000);
   server.handleClient();
 } 
