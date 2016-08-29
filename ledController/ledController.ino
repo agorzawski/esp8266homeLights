@@ -111,8 +111,8 @@ void setup(void){
     digitalWrite(dout1, HIGH);
     digitalWrite(dout2, HIGH);
     blinkStatusLED(200,200);
-    out2 = !out2;
-    out1 = !out1;
+    out2 = true;
+    out1 = true;
     updateWebPageBody();
     server.send(200, "text/html", webPage);
     Serial.println("All ON...");
@@ -123,8 +123,8 @@ void setup(void){
     digitalWrite(dout1, LOW);
     digitalWrite(dout2, LOW);
     blinkStatusLED(200,200);
-    out2 = !out2;
-    out1 = !out1;
+    out2 = false;
+    out1 = false;
     updateWebPageBody();
     server.send(200, "text/html", webPage);
     Serial.println("All OFF...");
@@ -244,20 +244,19 @@ unsigned long getTime(){
 void updateWebPageBody(){
   webPage = "";
   webPage += "<!DOCTYPE HTML>\r\n<html>";
+  //bootstrap
   webPage += "<link rel=\"stylesheet\" href=\"https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css\" ";
   webPage += "integrity=\"sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u\" crossorigin=\"anonymous\"> \n";
-  
   webPage += " <script src=\"https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js\" ";
   webPage += "integrity=\"sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa\" crossorigin=\"anonymous\"></script> \n";
   
   webPage +=" <body>\n";
   webPage += "<h1>Garden Lights v0.1 </h1>\n";
-// webPage += "<p>Start systemu:"+to_string(epochTime)+"</p>";
 
   //Status
   webPage += "<hr>";
   webPage += "<h2>Status: </h2>\n";
-  
+// webPage += "<p>Start systemu:"+to_string(epochTime)+"</p>"; 
   if (out1){
     webPage += " <p class=\"bg-success\">Lights 1 are ON</p>\n";
   }else{
@@ -276,7 +275,6 @@ void updateWebPageBody(){
   webPage += "<p> <a href=\"socket2On\"> <button class=\"btn btn-success btn-lg\">ON Lights 2 </button></a> &nbsp; <a href=\"socket2Off\"><button class=\"btn btn-danger btn-lg\">OFF Lights 2 </button></a></p> \n";
   webPage += "<p> <a href=\"allOn\">     <button class=\"btn btn-success btn-lg\">ON ALL</button></a> &nbsp; <a href=\"allOff\">  <button class=\"btn btn-danger btn-lg\">OFF ALL</button></a></p> \n";  
   webPage += "<hr>";
-  webPage += "";
   webPage += "</body></html>\n";
 }
 
