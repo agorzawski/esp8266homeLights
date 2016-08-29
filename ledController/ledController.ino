@@ -243,20 +243,60 @@ unsigned long getTime(){
 
 void updateWebPageBody(){
   webPage = "";
-  webPage += "<!DOCTYPE HTML>\r\n<html>";
+  webPage += "<!DOCTYPE HTML>\r\n<html>\n<head>\n";
+  webPage += "<meta charset=\"utf-8\"> \n";
+  webPage += "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n";
+  webPage += "<title>HOME LIGTHS Arduino</title>";
   //bootstrap
   webPage += "<link rel=\"stylesheet\" href=\"https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css\" ";
   webPage += "integrity=\"sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u\" crossorigin=\"anonymous\"> \n";
   webPage += " <script src=\"https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js\" ";
   webPage += "integrity=\"sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa\" crossorigin=\"anonymous\"></script> \n";
-  
-  webPage +=" <body>\n";
+  //
+  webPage += "  <link rel=\"stylesheet\" href=\"//code.jquery.com/ui/1.12.0/themes/base/jquery-ui.css\">\n";
+  webPage += "  <link rel=\"stylesheet\" href=\"/resources/demos/style.css\">\n";
+  webPage += "  <script src=\"https://code.jquery.com/jquery-1.12.4.js\"></script>\n";
+  webPage += "  <script src=\"https://code.jquery.com/ui/1.12.0/jquery-ui.js\"></script>\n";
+  webPage += "<script>\n";
+  webPage += "$( function() {\n";
+  webPage  += "   $( \"input\" ).checkboxradio();\n";
+  webPage += "} );\n";
+  webPage += "</script>\n";
+  webPage += "<script>\n";
+  webPage += "$( function() {\n";
+  webPage  += "   $( \"#accordion\" ).accordion();\n";
+  webPage += "} );\n";
+  webPage += "</script>\n";
+  webPage +=" <head/>\n<body>\n";
   webPage += "<h1>Garden Lights v0.1 </h1>\n";
 
   //Status
-  webPage += "<hr>";
-  webPage += "<h2>Status: </h2>\n";
-// webPage += "<p>Start systemu:"+to_string(epochTime)+"</p>"; 
+  webPage += "<div id=\"accordion\">";
+
+  // Controll
+  
+  webPage += "<h2>Controll: </h2>\n<div>\n";
+  webPage += "<p> "; 
+    if (out1){
+    webPage += " <a href=\"socket1Off\"><button class=\"btn btn-danger btn-lg\">OFF Lights 1 </button></a>\n";
+  }else{
+    webPage += " <a href=\"socket1On\"> <button class=\"btn btn-success btn-lg\">ON Lights 1 </button></a>\n ";
+  }
+  webPage += "</p> \n";
+  webPage += "<p> "; 
+    if (out2){
+    webPage += " <a href=\"socket2Off\"><button class=\"btn btn-danger btn-lg\">OFF Lights 2 </button></a>\n";
+  }else{
+    webPage += " <a href=\"socket2On\"> <button class=\"btn btn-success btn-lg\">ON Lights 2 </button></a>\n ";
+  }
+  webPage += "</p> \n";
+  webPage += "<p> <a href=\"allOn\">  <button class=\"btn btn-success btn-lg\">ON ALL</button></a> &nbsp; <a href=\"allOff\">  <button class=\"btn btn-danger btn-lg\">OFF ALL</button></a></p> \n";  
+  webPage += "</div>\n";
+  
+  webPage += "<h2>Status: </h2>\n<div>\n";
+  char temp[50];
+  sprintf(temp, "<p>Start systemu: %lu </p>", epochTime);
+  webPage += temp; 
   if (out1){
     webPage += " <p class=\"bg-success\">Lights 1 are ON</p>\n";
   }else{
@@ -267,14 +307,22 @@ void updateWebPageBody(){
   }else{
     webPage += " <p class=\"bg-danger\">Lights 2 are OFF</p>\n";
   }
+  webPage += "</div>\n";
 
-  // Controll
-  webPage += "<hr>";
-  webPage += "<h2>Controll: </h2>\n";
-  webPage += "<p> <a href=\"socket1On\"> <button class=\"btn btn-success btn-lg\">ON Lights 1 </button></a> &nbsp; <a href=\"socket1Off\"><button class=\"btn btn-danger btn-lg\">OFF Lights 1 </button></a></p> \n";
-  webPage += "<p> <a href=\"socket2On\"> <button class=\"btn btn-success btn-lg\">ON Lights 2 </button></a> &nbsp; <a href=\"socket2Off\"><button class=\"btn btn-danger btn-lg\">OFF Lights 2 </button></a></p> \n";
-  webPage += "<p> <a href=\"allOn\">     <button class=\"btn btn-success btn-lg\">ON ALL</button></a> &nbsp; <a href=\"allOff\">  <button class=\"btn btn-danger btn-lg\">OFF ALL</button></a></p> \n";  
-  webPage += "<hr>";
-  webPage += "</body></html>\n";
+  webPage += "<h2>Configuration: </h2>\n<div>\n"; 
+  webPage += "<fieldset>\n";
+  webPage += "  <legend>Automatic swichoff</legend>\n";
+  webPage += "  <label for=\"checkbox-1\">Mon - Fri</label>\n";
+  webPage += "  <input type=\"checkbox\" name=\"checkbox-1\" id=\"checkbox-1\">\n";
+  webPage += "  <label for=\"checkbox-2\">Sat</label>\n";
+  webPage += "  <input type=\"checkbox\" name=\"checkbox-2\" id=\"checkbox-2\">\n";
+  webPage += "  <label for=\"checkbox-3\">Sun</label>\n";
+  webPage += "  <input type=\"checkbox\" name=\"checkbox-3\" id=\"checkbox-3\">\n";
+  webPage += "</fieldset>\n";
+  webPage += " <a href=\"ScheduleSave\"><button class=\"btn btn-success btn-lg\">Save changes</button></a>\n";
+  webPage += "</div>\n";
+  
+  webPage += "</div>\n";
+  webPage += "</body>\n</html>\n";
 }
 

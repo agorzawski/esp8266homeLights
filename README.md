@@ -8,4 +8,5 @@ Main board:
 Two channel pcb for 230V triac controlled relay:
 ![pcb](2chanelOptTiacPcb.jpg)
 
-
+WEB interface:
+![web](Screenshot.png)
