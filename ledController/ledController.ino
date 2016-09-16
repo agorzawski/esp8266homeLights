@@ -3,6 +3,7 @@
 #include <ESP8266WebServer.h>
 #include <ESP8266mDNS.h>
 #include <WiFiUdp.h>
+#include "FS.h"
 #include <string>
 
 MDNSResponder mdns;
@@ -23,37 +24,32 @@ WiFiUDP udp;
 // outputs
 int dout1 = 4;
 int dout2 = 5;
+int dout3 = 0; // todo check!!
 int doutled = 2;
 boolean out1 = false;
 boolean out2 = false;
+boolean out3 = false;
 
 ESP8266WebServer server(80);
 String webPage = "";
 
-void setup(void){
+void setup(void) {
   updateWebPageBody();
-  
+
   // preparing GPIOs
   pinMode(dout1, OUTPUT);
   digitalWrite(dout1, LOW);
   pinMode(dout2, OUTPUT);
   digitalWrite(dout2, LOW);
+  pinMode(dout3, OUTPUT);
+  digitalWrite(dout3, LOW);
   pinMode(doutled, OUTPUT);
   digitalWrite(doutled, LOW);
 
-  uint8_t macAddress[6];
-  WiFi.macAddress(macAddress);
-  delay(100);
-  Serial.printf("\n\nMAC address: %02X:%02X:%02X:%02X:%02X:%02X\n",
-                macAddress[0],
-                macAddress[1],
-                macAddress[2],
-                macAddress[3],
-                macAddress[4],
-                macAddress[5]);
-           
   delay(1000);
   Serial.begin(115200);
+
+  // Begin connection
   WiFi.begin(ssid, password);
   Serial.println("");
 
@@ -67,69 +63,111 @@ void setup(void){
   Serial.println(ssid);
   Serial.print("IP address: ");
   Serial.println(WiFi.localIP());
-  
   if (mdns.begin("esp8266", WiFi.localIP())) {
     Serial.println("MDNS responder started");
   }
-  
-  server.on("/", [](){
+
+ SPIFFS.begin();
+  File f = SPIFFS.open("/timer.conf", "w");
+  if (!f) {
+    Serial.println("File open failed!");
+    Serial.println("Creating a default one...");
+    f.println("01111111");
+    f.println("20");
+    f.println("2");
+    Serial.println("...DONE!");
+    f.close();
+    f = SPIFFS.open("/timer.conf", "r");
+  } else {
+    f.close();
+    f = SPIFFS.open("/timer.conf", "r");
+    Serial.println("Config file exists!");
+    Serial.println(f.name());
+  }
+  f.close();
+  // Set HTML server responses
+  server.on("/", []() {
     server.send(200, "text/html", webPage);
   });
-  server.on("/socket1On", [](){
+  
+  server.on("/socket1On", []() {
     digitalWrite(dout1, HIGH);
-    blinkStatusLED(200,200);
+    blinkStatusLED(200, 200);
     out1 = !out1;
     updateWebPageBody();
     server.send(200, "text/html", webPage);
     Serial.print("Internal clock for reference: ");
     Serial.println(millis());
   });
-  server.on("/socket1Off", [](){
+  server.on("/socket1Off", []() {
     digitalWrite(dout1, LOW);
-    out1 = !out1;
-    updateWebPageBody();
-    server.send(200, "text/html", webPage);
-  });
-  server.on("/socket2On", [](){
-    digitalWrite(dout2, HIGH);
-    //delay(1000);
-    blinkStatusLED(200,200);
-    out2 = !out2;
-    updateWebPageBody();
-    server.send(200, "text/html", webPage);
-    Serial.print("Internal clock for reference: ");
-    Serial.println(millis());    
-  });
-  server.on("/socket2Off", [](){
-    digitalWrite(dout2, LOW);
-    out2 = !out2;
-    updateWebPageBody();
-    server.send(200, "text/html", webPage);
-  });
-
-  server.on("/allOn", [](){
-    digitalWrite(dout1, HIGH);
-    digitalWrite(dout2, HIGH);
-    blinkStatusLED(200,200);
-    out2 = true;
     out1 = true;
     updateWebPageBody();
     server.send(200, "text/html", webPage);
-    Serial.println("All ON...");
-    
   });
 
-   server.on("/allOff", [](){
+  server.on("/socket2On", []() {
+    digitalWrite(dout2, HIGH);
+    out2 = true;
+    updateWebPageBody();
+    server.send(200, "text/html", webPage);
+    Serial.print("Internal clock for reference: ");
+    Serial.println(millis());
+  });
+  server.on("/socket2Off", []() {
+    digitalWrite(dout2, LOW);
+    out2 = false;
+    updateWebPageBody();
+    server.send(200, "text/html", webPage);
+  });
+
+  server.on("/socket3On", []() {
+    digitalWrite(dout3, HIGH);
+    out3 = true;
+    updateWebPageBody();
+    server.send(200, "text/html", webPage);
+    Serial.print("Internal clock for reference: ");
+    Serial.println(millis());
+  });
+  server.on("/socket3Off", []() {
+    digitalWrite(dout3, LOW);
+    out3 = false;
+    updateWebPageBody();
+    server.send(200, "text/html", webPage);
+  });
+
+
+  server.on("/allOn", []() {
+    digitalWrite(dout1, HIGH);
+    digitalWrite(dout2, HIGH);
+    digitalWrite(dout3, HIGH);
+    blinkStatusLED(200, 200);
+    out2 = true;
+    out1 = true;
+    out3 = true;
+    updateWebPageBody();
+    server.send(200, "text/html", webPage);
+    Serial.println("All ON...");
+  });
+
+  server.on("/allOff", []() {
     digitalWrite(dout1, LOW);
     digitalWrite(dout2, LOW);
-    blinkStatusLED(200,200);
+    digitalWrite(dout3, LOW);
+    blinkStatusLED(200, 200);
     out2 = false;
     out1 = false;
+    out3 = false;
     updateWebPageBody();
     server.send(200, "text/html", webPage);
     Serial.println("All OFF...");
   });
-  
+
+  server.on("/saveSettings", []() {
+    // process the form (from POST)
+    Serial.println("All SET...");
+  });
+
   server.begin();
   Serial.println("HTTP server started");
 
@@ -142,17 +180,17 @@ void setup(void){
   Serial.println(millis());
 }
 
-void blinkStatusLED(int high, int low){
-    digitalWrite(doutled, HIGH);
-    delay(high);
-    digitalWrite(doutled, LOW);
-    delay(low);
+void blinkStatusLED(int high, int low) {
+  digitalWrite(doutled, HIGH);
+  delay(high);
+  digitalWrite(doutled, LOW);
+  delay(low);
 }
- 
-void loop(void){
-  blinkStatusLED(1000,1000);
+
+void loop(void) {
+  blinkStatusLED(1000, 1000);
   server.handleClient();
-} 
+}
 
 
 // send an NTP request to the time server at the given address
@@ -181,14 +219,14 @@ unsigned long sendNTPpacket(IPAddress& address)
 }
 
 
-unsigned long getTime(){
-   //get a random server from the pool
-  WiFi.hostByName(ntpServerName, timeServerIP); 
+unsigned long getTime() {
+  //get a random server from the pool
+  WiFi.hostByName(ntpServerName, timeServerIP);
   unsigned long epoch = 1;
   sendNTPpacket(timeServerIP); // send an NTP packet to a time server
   // wait to see if a reply is available
   delay(2000);
-  
+
   int cb = udp.parsePacket();
   if (!cb) {
     Serial.println("no packet yet");
@@ -234,19 +272,19 @@ unsigned long getTime(){
       Serial.print('0');
     }
     Serial.println(epoch % 60); // print the second
-    
+
   }
   // wait ten seconds before asking for the time again
   //delay(10000);
   return epoch;
 }
 
-void updateWebPageBody(){
+void updateWebPageBody() {
   webPage = "";
   webPage += "<!DOCTYPE HTML>\r\n<html>\n<head>\n";
   webPage += "<meta charset=\"utf-8\"> \n";
   webPage += "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n";
-  webPage += "<title>HOME LIGTHS Arduino</title>";
+  webPage += "<title>HOME LIGHTS Arduino</title>";
   //bootstrap
   webPage += "<link rel=\"stylesheet\" href=\"https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css\" ";
   webPage += "integrity=\"sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u\" crossorigin=\"anonymous\"> \n";
@@ -267,49 +305,56 @@ void updateWebPageBody(){
   webPage  += "   $( \"#accordion\" ).accordion();\n";
   webPage += "} );\n";
   webPage += "</script>\n";
-  webPage +=" <head/>\n<body>\n";
-  webPage += "<h1>Garden Lights v0.1 </h1>\n";
+  webPage += " <head/>\n<body>\n";
+  webPage += "<h1>Garden Lights v0.2 </h1>\n";
 
   //Status
   webPage += "<div id=\"accordion\">";
 
   // Controll
-  
-  webPage += "<h2>Controll: </h2>\n<div>\n";
-  webPage += "<p> "; 
-    if (out1){
+
+  webPage += "<h2>Control: </h2>\n<div>\n";
+  webPage += "<p> ";
+  if (out1) {
     webPage += " <a href=\"socket1Off\"><button class=\"btn btn-danger btn-lg\">OFF Lights 1 </button></a>\n";
-  }else{
+  } else {
     webPage += " <a href=\"socket1On\"> <button class=\"btn btn-success btn-lg\">ON Lights 1 </button></a>\n ";
   }
   webPage += "</p> \n";
-  webPage += "<p> "; 
-    if (out2){
+  webPage += "<p> ";
+  if (out2) {
     webPage += " <a href=\"socket2Off\"><button class=\"btn btn-danger btn-lg\">OFF Lights 2 </button></a>\n";
-  }else{
+  } else {
     webPage += " <a href=\"socket2On\"> <button class=\"btn btn-success btn-lg\">ON Lights 2 </button></a>\n ";
   }
   webPage += "</p> \n";
-  webPage += "<p> <a href=\"allOn\">  <button class=\"btn btn-success btn-lg\">ON ALL</button></a> &nbsp; <a href=\"allOff\">  <button class=\"btn btn-danger btn-lg\">OFF ALL</button></a></p> \n";  
+  webPage += "<p> ";
+  if (out3) {
+    webPage += " <a href=\"socket3Off\"><button class=\"btn btn-danger btn-lg\">OFF Lights 3 </button></a>\n";
+  } else {
+    webPage += " <a href=\"socket3On\"> <button class=\"btn btn-success btn-lg\">ON Lights 3 </button></a>\n ";
+  }
+  webPage += "</p> \n";
+  webPage += "<p> <a href=\"allOn\">  <button class=\"btn btn-success btn-lg\">ON ALL</button></a> &nbsp; <a href=\"allOff\">  <button class=\"btn btn-danger btn-lg\">OFF ALL</button></a></p> \n";
   webPage += "</div>\n";
-  
+
   webPage += "<h2>Status: </h2>\n<div>\n";
   char temp[50];
   sprintf(temp, "<p>Start systemu: %lu </p>", epochTime);
-  webPage += temp; 
-  if (out1){
+  webPage += temp;
+  if (out1) {
     webPage += " <p class=\"bg-success\">Lights 1 are ON</p>\n";
-  }else{
+  } else {
     webPage += " <p class=\"bg-danger\">Lights 1 are OFF</p>\n";
   }
-  if (out2){
+  if (out2) {
     webPage += " <p class=\"bg-success\">Lights 2 are ON </p>\n";
-  }else{
+  } else {
     webPage += " <p class=\"bg-danger\">Lights 2 are OFF</p>\n";
   }
   webPage += "</div>\n";
 
-  webPage += "<h2>Configuration: </h2>\n<div>\n"; 
+  webPage += "<h2>Configuration: </h2>\n<div>\n";
   webPage += "<fieldset>\n";
   webPage += "  <legend>Automatic swichoff</legend>\n";
   webPage += "  <label for=\"checkbox-1\">Mon - Fri</label>\n";
@@ -321,7 +366,7 @@ void updateWebPageBody(){
   webPage += "</fieldset>\n";
   webPage += " <a href=\"ScheduleSave\"><button class=\"btn btn-success btn-lg\">Save changes</button></a>\n";
   webPage += "</div>\n";
-  
+
   webPage += "</div>\n";
   webPage += "</body>\n</html>\n";
 }
