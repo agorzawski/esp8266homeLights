@@ -5,26 +5,29 @@
 #include <WiFiUdp.h>
 #include "FS.h"
 #include <string>
+#include <sstream>
 
 MDNSResponder mdns;
 
 const char* ssid = "a_r_o_2";
 const char* password = "Cern0wiec";
-
 unsigned long epochTime;
+unsigned long lastCheckEpoch;
+int hourOn = 0;
+int hourOff = 1;
+
 unsigned int localPort = 2390;      // local port to listen for UDP packets
 IPAddress timeServerIP; // time.nist.gov NTP server address
 const char* ntpServerName = "time.nist.gov";
 const int NTP_PACKET_SIZE = 48; // NTP time stamp is in the first 48 bytes of the message
 byte packetBuffer[ NTP_PACKET_SIZE]; //buffer to hold incoming and outgoing packets
-// A UDP instance to let us send and receive packets over UDP
-WiFiUDP udp;
-
+WiFiUDP udp; // A UDP instance to let us send and receive packets over UDP
 
 // outputs
 int dout1 = 4;
 int dout2 = 5;
 int dout3 = 0; // todo check!!
+
 int doutled = 2;
 boolean out1 = false;
 boolean out2 = false;
@@ -67,7 +70,8 @@ void setup(void) {
     Serial.println("MDNS responder started");
   }
 
- SPIFFS.begin();
+  //load the configuration 
+  SPIFFS.begin();
   File f = SPIFFS.open("/timer.conf", "w");
   if (!f) {
     Serial.println("File open failed!");
@@ -83,8 +87,21 @@ void setup(void) {
     f = SPIFFS.open("/timer.conf", "r");
     Serial.println("Config file exists!");
     Serial.println(f.name());
+    int lineCount=0;
+    while(f.available()) {
+      //Lets read line by line from the file
+      String line = f.readStringUntil('\n');
+      switch (lineCount){
+        case 0 : break;
+//        case 1 : hourOn = atoi(line); break;
+//        case 2 : hourOff = atoi(line); break;
+      }    
+      Serial.println(line);
+      lineCount++;
+    }
   }
   f.close();
+  
   // Set HTML server responses
   server.on("/", []() {
     server.send(200, "text/html", webPage);
@@ -136,7 +153,6 @@ void setup(void) {
     server.send(200, "text/html", webPage);
   });
 
-
   server.on("/allOn", []() {
     digitalWrite(dout1, HIGH);
     digitalWrite(dout2, HIGH);
@@ -170,7 +186,6 @@ void setup(void) {
 
   server.begin();
   Serial.println("HTTP server started");
-
   Serial.println("Starting UDP");
   udp.begin(localPort);
   Serial.print("Local port: ");
@@ -180,18 +195,19 @@ void setup(void) {
   Serial.println(millis());
 }
 
+
+void loop(void) {
+  blinkStatusLED(1000, 1000);
+  checkTimers();
+  server.handleClient();
+}
+
 void blinkStatusLED(int high, int low) {
   digitalWrite(doutled, HIGH);
   delay(high);
   digitalWrite(doutled, LOW);
   delay(low);
 }
-
-void loop(void) {
-  blinkStatusLED(1000, 1000);
-  server.handleClient();
-}
-
 
 // send an NTP request to the time server at the given address
 unsigned long sendNTPpacket(IPAddress& address)
@@ -210,7 +226,6 @@ unsigned long sendNTPpacket(IPAddress& address)
   packetBuffer[13]  = 0x4E;
   packetBuffer[14]  = 49;
   packetBuffer[15]  = 52;
-
   // all NTP fields have been given values, now
   // you can send a packet requesting a timestamp:
   udp.beginPacket(address, 123); //NTP requests are to port 123
@@ -226,7 +241,7 @@ unsigned long getTime() {
   sendNTPpacket(timeServerIP); // send an NTP packet to a time server
   // wait to see if a reply is available
   delay(2000);
-
+  
   int cb = udp.parsePacket();
   if (!cb) {
     Serial.println("no packet yet");
@@ -256,29 +271,46 @@ unsigned long getTime() {
     epoch = secsSince1900 - seventyYears;
     // print Unix time:
     Serial.println(epoch);
-
-    // print the hour, minute and second:
-    Serial.print("The UTC time is ");       // UTC is the time at Greenwich Meridian (GMT)
-    Serial.print((epoch  % 86400L) / 3600); // print the hour (86400 equals secs per day)
-    Serial.print(':');
-    if ( ((epoch % 3600) / 60) < 10 ) {
-      // In the first 10 minutes of each hour, we'll want a leading '0'
-      Serial.print('0');
-    }
-    Serial.print((epoch  % 3600) / 60); // print the minute (3600 equals secs per minute)
-    Serial.print(':');
-    if ( (epoch % 60) < 10 ) {
-      // In the first 10 seconds of each minute, we'll want a leading '0'
-      Serial.print('0');
-    }
-    Serial.println(epoch % 60); // print the second
-
+    Serial.println(timeToString(epoch));
   }
-  // wait ten seconds before asking for the time again
-  //delay(10000);
+  lastCheckEpoch = epoch;
   return epoch;
 }
 
+String timeToString(unsigned long epoch){
+    String oss = "UTC: " + String(((epoch  % 86400L) / 3600)) + ":";
+    if ( ((epoch % 3600) / 60) < 10 ) {
+      oss += "0";
+    }
+    oss +=  String( ((epoch  % 3600) / 60) ) + ":"; 
+    if ( (epoch % 60) < 10 ) {
+      oss+= "0";
+    }
+    oss +=  String((epoch % 60)); 
+    return oss;
+}
+
+boolean isHourForTrigger(long epoch, int hour){
+  return ((epoch  % 86400L) / 3600) == hour;
+}
+
+void checkTimers(){
+  long currentTime = epochTime + millis()/1000;
+  if (currentTime - lastCheckEpoch > 10){
+
+    if (isHourForTrigger(currentTime, hourOn)){
+      //TODO
+    }
+
+    if (isHourForTrigger(currentTime, hourOff)){
+      //TODO 
+    }
+    Serial.println("Time:" + timeToString(currentTime));
+    lastCheckEpoch = currentTime;
+  }
+}
+
+ 
 void updateWebPageBody() {
   webPage = "";
   webPage += "<!DOCTYPE HTML>\r\n<html>\n<head>\n";
@@ -339,9 +371,7 @@ void updateWebPageBody() {
   webPage += "</div>\n";
 
   webPage += "<h2>Status: </h2>\n<div>\n";
-  char temp[50];
-  sprintf(temp, "<p>Start systemu: %lu </p>", epochTime);
-  webPage += temp;
+  webPage += timeToString(epochTime);
   if (out1) {
     webPage += " <p class=\"bg-success\">Lights 1 are ON</p>\n";
   } else {
@@ -352,22 +382,38 @@ void updateWebPageBody() {
   } else {
     webPage += " <p class=\"bg-danger\">Lights 2 are OFF</p>\n";
   }
+  if (out3) {
+    webPage += " <p class=\"bg-success\">Lights 3 are ON </p>\n";
+  } else {
+    webPage += " <p class=\"bg-danger\">Lights 3 are OFF</p>\n";
+  }
   webPage += "</div>\n";
 
   webPage += "<h2>Configuration: </h2>\n<div>\n";
   webPage += "<fieldset>\n";
   webPage += "  <legend>Automatic swichoff</legend>\n";
-  webPage += "  <label for=\"checkbox-1\">Mon - Fri</label>\n";
+  webPage += "  <label for=\"checkbox-1\">Mon</label>\n";
   webPage += "  <input type=\"checkbox\" name=\"checkbox-1\" id=\"checkbox-1\">\n";
-  webPage += "  <label for=\"checkbox-2\">Sat</label>\n";
+  webPage += "  <label for=\"checkbox-2\">Tue</label>\n";
   webPage += "  <input type=\"checkbox\" name=\"checkbox-2\" id=\"checkbox-2\">\n";
-  webPage += "  <label for=\"checkbox-3\">Sun</label>\n";
+  webPage += "  <label for=\"checkbox-3\">Wed</label>\n";
   webPage += "  <input type=\"checkbox\" name=\"checkbox-3\" id=\"checkbox-3\">\n";
+  webPage += "  <label for=\"checkbox-4\">Thu</label>\n";
+  webPage += "  <input type=\"checkbox\" name=\"checkbox-4\" id=\"checkbox-4\">\n";
+  webPage += "  <label for=\"checkbox-5\">Fri</label>\n";
+  webPage += "  <input type=\"checkbox\" name=\"checkbox-5\" id=\"checkbox-5\">\n";
+  webPage += "  <label for=\"checkbox-6\">Sat</label>\n";
+  webPage += "  <input type=\"checkbox\" name=\"checkbox-6\" id=\"checkbox-6\">\n";
+  webPage += "  <label for=\"checkbox-7\">Sun</label>\n";
+  webPage += "  <input type=\"checkbox\" name=\"checkbox-7\" id=\"checkbox-7\">\n";
   webPage += "</fieldset>\n";
-  webPage += " <a href=\"ScheduleSave\"><button class=\"btn btn-success btn-lg\">Save changes</button></a>\n";
-  webPage += "</div>\n";
 
+  
+  webPage += "<a href=\"ScheduleSave\"><button class=\"btn btn-success btn-lg\">Save changes</button></a>\n";
   webPage += "</div>\n";
+  webPage += "</div>\n";
+  
+  webPage += "<div style=\"font: arial;font-size: 12px;\"><p><iframe src=\"timer.conf\" width=200 height=400 frameborder=0 ></iframe></p></div>\n";  
   webPage += "</body>\n</html>\n";
 }
 
