@@ -15,6 +15,7 @@ unsigned long epochTime;
 unsigned long lastCheckEpoch;
 int hourOn = 0;
 int hourOff = 1;
+String daysScheduled = "01111110";
 
 unsigned int localPort = 2390;      // local port to listen for UDP packets
 IPAddress timeServerIP; // time.nist.gov NTP server address
@@ -24,28 +25,23 @@ byte packetBuffer[ NTP_PACKET_SIZE]; //buffer to hold incoming and outgoing pack
 WiFiUDP udp; // A UDP instance to let us send and receive packets over UDP
 
 // outputs
-int dout1 = 4;
-int dout2 = 5;
-int dout3 = 0; // todo check!!
-
-int doutled = 2;
-boolean out1 = false;
-boolean out2 = false;
-boolean out3 = false;
+int dout [] = {4,5,0};
+boolean out[] = {false, false, false};
+int doutled=2;
 
 ESP8266WebServer server(80);
 String webPage = "";
-
+  
 void setup(void) {
   updateWebPageBody();
 
   // preparing GPIOs
-  pinMode(dout1, OUTPUT);
-  digitalWrite(dout1, LOW);
-  pinMode(dout2, OUTPUT);
-  digitalWrite(dout2, LOW);
-  pinMode(dout3, OUTPUT);
-  digitalWrite(dout3, LOW);
+  pinMode(dout[0], OUTPUT);
+  digitalWrite(dout[0], LOW);
+  pinMode(dout[1], OUTPUT);
+  digitalWrite(dout[1], LOW);
+  pinMode(dout[2], OUTPUT);
+  digitalWrite(dout[2], LOW);
   pinMode(doutled, OUTPUT);
   digitalWrite(doutled, LOW);
 
@@ -93,8 +89,8 @@ void setup(void) {
       String line = f.readStringUntil('\n');
       switch (lineCount){
         case 0 : break;
-//        case 1 : hourOn = atoi(line); break;
-//        case 2 : hourOff = atoi(line); break;
+        case 1 : hourOn = line.toInt(); break;
+        case 2 : hourOff = line.toInt(); break;
       }    
       Serial.println(line);
       lineCount++;
@@ -106,74 +102,55 @@ void setup(void) {
   server.on("/", []() {
     server.send(200, "text/html", webPage);
   });
-  
+
+  server.on("/ScheduleSave", HTTP_GET,  [](){
+    String hourOn_s=server.arg("startHour");
+    String hourOff_s=server.arg("endHour");
+    Serial.println("GET hourOn: " + hourOn_s);
+    hourOn = hourOn_s.toInt();
+    hourOff = hourOff_s.toInt();
+
+    char* days[] = {"w-1","w-2","w-3","w-4","w-5","w-6","w-7"};
+    String configString = "0";
+    for (String one: days){
+      String state=server.arg(one);
+      if (state == "on"){
+        configString += "1";
+      } else{
+        configString += "0";
+      }
+    }
+    daysScheduled = configString;  
+    //saveFile(configString, hourOn, hourOff) ;
+    updateWebPageBody();
+    server.send(200, "text/html", webPage);
+  });
   server.on("/socket1On", []() {
-    digitalWrite(dout1, HIGH);
-    blinkStatusLED(200, 200);
-    out1 = !out1;
-    updateWebPageBody();
-    server.send(200, "text/html", webPage);
-    Serial.print("Internal clock for reference: ");
-    Serial.println(millis());
-  });
+    socketOn(0);  });
   server.on("/socket1Off", []() {
-    digitalWrite(dout1, LOW);
-    out1 = true;
-    updateWebPageBody();
-    server.send(200, "text/html", webPage);
-  });
-
+    socketOff(0); });
   server.on("/socket2On", []() {
-    digitalWrite(dout2, HIGH);
-    out2 = true;
-    updateWebPageBody();
-    server.send(200, "text/html", webPage);
-    Serial.print("Internal clock for reference: ");
-    Serial.println(millis());
-  });
+    socketOn(1);  });
   server.on("/socket2Off", []() {
-    digitalWrite(dout2, LOW);
-    out2 = false;
-    updateWebPageBody();
-    server.send(200, "text/html", webPage);
-  });
-
+    socketOff(1); });
   server.on("/socket3On", []() {
-    digitalWrite(dout3, HIGH);
-    out3 = true;
-    updateWebPageBody();
-    server.send(200, "text/html", webPage);
-    Serial.print("Internal clock for reference: ");
-    Serial.println(millis());
-  });
+    socketOn(2);  });
   server.on("/socket3Off", []() {
-    digitalWrite(dout3, LOW);
-    out3 = false;
-    updateWebPageBody();
-    server.send(200, "text/html", webPage);
-  });
-
+    socketOff(2); });
   server.on("/allOn", []() {
-    digitalWrite(dout1, HIGH);
-    digitalWrite(dout2, HIGH);
-    digitalWrite(dout3, HIGH);
-    blinkStatusLED(200, 200);
-    out2 = true;
-    out1 = true;
-    out3 = true;
+    for (int i=0; i<sizeof(dout);i++){
+      digitalWrite(dout[i], HIGH);
+      out[i]=true;
+    }
     updateWebPageBody();
     server.send(200, "text/html", webPage);
     Serial.println("All ON...");
   });
-
   server.on("/allOff", []() {
-    digitalWrite(dout1, LOW);
-    digitalWrite(dout2, LOW);
-    digitalWrite(dout3, LOW);
-    blinkStatusLED(200, 200);
-    out2 = false;
-    out1 = false;
-    out3 = false;
+    for (int i=0; i<sizeof(dout);i++){
+      digitalWrite(dout[i], LOW);
+      out[i]=false;
+    }
     updateWebPageBody();
     server.send(200, "text/html", webPage);
     Serial.println("All OFF...");
@@ -195,11 +172,27 @@ void setup(void) {
   Serial.println(millis());
 }
 
-
 void loop(void) {
   blinkStatusLED(1000, 1000);
   checkTimers();
   server.handleClient();
+}
+
+void socketOn(int i){
+  digitalWrite(dout[i], HIGH);
+  blinkStatusLED(200, 200);
+  out[i] = true;
+  updateWebPageBody();
+  server.send(200, "text/html", webPage);
+  Serial.print("Internal clock for reference: ");
+  Serial.println(millis());  
+}
+
+void socketOff(int i){
+  digitalWrite(dout[i], LOW);
+  out[i] = false;
+  updateWebPageBody();
+  server.send(200, "text/html", webPage);
 }
 
 void blinkStatusLED(int high, int low) {
@@ -287,7 +280,7 @@ String timeToString(unsigned long epoch){
       oss+= "0";
     }
     oss +=  String((epoch % 60)); 
-    return oss;
+    return oss; 
 }
 
 boolean isHourForTrigger(long epoch, int hour){
@@ -299,11 +292,11 @@ void checkTimers(){
   if (currentTime - lastCheckEpoch > 10){
 
     if (isHourForTrigger(currentTime, hourOn)){
-      //TODO
+      Serial.println("Should switchOn lights!");
     }
 
     if (isHourForTrigger(currentTime, hourOff)){
-      //TODO 
+      Serial.println("Should switchOff lights!");
     }
     Serial.println("Time:" + timeToString(currentTime));
     lastCheckEpoch = currentTime;
@@ -316,7 +309,7 @@ void updateWebPageBody() {
   webPage += "<!DOCTYPE HTML>\r\n<html>\n<head>\n";
   webPage += "<meta charset=\"utf-8\"> \n";
   webPage += "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n";
-  webPage += "<title>HOME LIGHTS Arduino</title>";
+  webPage += "<title>HOME LIGHTS Arduino</title>\n";
   //bootstrap
   webPage += "<link rel=\"stylesheet\" href=\"https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css\" ";
   webPage += "integrity=\"sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u\" crossorigin=\"anonymous\"> \n";
@@ -337,83 +330,73 @@ void updateWebPageBody() {
   webPage  += "   $( \"#accordion\" ).accordion();\n";
   webPage += "} );\n";
   webPage += "</script>\n";
-  webPage += " <head/>\n<body>\n";
-  webPage += "<h1>Garden Lights v0.2 </h1>\n";
-
+  webPage += "</head>\n<body>\n";
+  webPage += "<h1>Garden Lights v0.21 </h1>\n";
   //Status
-  webPage += "<div id=\"accordion\">";
-
+  webPage += "<div id=\"accordion\">\n";
   // Controll
-
-  webPage += "<h2>Control: </h2>\n<div>\n";
-  webPage += "<p> ";
-  if (out1) {
-    webPage += " <a href=\"socket1Off\"><button class=\"btn btn-danger btn-lg\">OFF Lights 1 </button></a>\n";
-  } else {
-    webPage += " <a href=\"socket1On\"> <button class=\"btn btn-success btn-lg\">ON Lights 1 </button></a>\n ";
+  webPage += "<h2>Control: </h2>\n <div>\n";
+  for (int i=0; i<sizeof(out); i++){  
+    webPage += "<p> ";
+    if (out[i]) {
+      webPage += " <a href=\"socket"+String(i+1)+"Off\"><button class=\"btn btn-danger btn-lg\">OFF Lights "+String(i+1)+" </button></a>\n";
+    } else {
+      webPage += " <a href=\"socket"+String(i+1)+"On\"> <button class=\"btn btn-success btn-lg\">ON Lights "+String(i+1)+" </button></a>\n ";
+    }
+    webPage += "</p> \n";
   }
-  webPage += "</p> \n";
-  webPage += "<p> ";
-  if (out2) {
-    webPage += " <a href=\"socket2Off\"><button class=\"btn btn-danger btn-lg\">OFF Lights 2 </button></a>\n";
-  } else {
-    webPage += " <a href=\"socket2On\"> <button class=\"btn btn-success btn-lg\">ON Lights 2 </button></a>\n ";
-  }
-  webPage += "</p> \n";
-  webPage += "<p> ";
-  if (out3) {
-    webPage += " <a href=\"socket3Off\"><button class=\"btn btn-danger btn-lg\">OFF Lights 3 </button></a>\n";
-  } else {
-    webPage += " <a href=\"socket3On\"> <button class=\"btn btn-success btn-lg\">ON Lights 3 </button></a>\n ";
-  }
-  webPage += "</p> \n";
   webPage += "<p> <a href=\"allOn\">  <button class=\"btn btn-success btn-lg\">ON ALL</button></a> &nbsp; <a href=\"allOff\">  <button class=\"btn btn-danger btn-lg\">OFF ALL</button></a></p> \n";
   webPage += "</div>\n";
 
-  webPage += "<h2>Status: </h2>\n<div>\n";
-  webPage += timeToString(epochTime);
-  if (out1) {
-    webPage += " <p class=\"bg-success\">Lights 1 are ON</p>\n";
-  } else {
-    webPage += " <p class=\"bg-danger\">Lights 1 are OFF</p>\n";
-  }
-  if (out2) {
-    webPage += " <p class=\"bg-success\">Lights 2 are ON </p>\n";
-  } else {
-    webPage += " <p class=\"bg-danger\">Lights 2 are OFF</p>\n";
-  }
-  if (out3) {
-    webPage += " <p class=\"bg-success\">Lights 3 are ON </p>\n";
-  } else {
-    webPage += " <p class=\"bg-danger\">Lights 3 are OFF</p>\n";
+  webPage += "<h2>Status: </h2>\n <div>\n";
+  webPage += timeToString(epochTime) + "\n" ;
+  for (int i=0; i < sizeof(out); i++){  
+    if (out[i]) {
+      webPage += " <p class=\"bg-success\">Lights "+String(i+1)+" are ON</p>\n";
+    } else {
+      webPage += " <p class=\"bg-danger\">Lights "+String(i+1)+" are OFF</p>\n";
+    }
   }
   webPage += "</div>\n";
 
   webPage += "<h2>Configuration: </h2>\n<div>\n";
+  webPage += "<form  action=\"ScheduleSave\" method=\"get\">\n";
   webPage += "<fieldset>\n";
-  webPage += "  <legend>Automatic swichoff</legend>\n";
-  webPage += "  <label for=\"checkbox-1\">Mon</label>\n";
-  webPage += "  <input type=\"checkbox\" name=\"checkbox-1\" id=\"checkbox-1\">\n";
-  webPage += "  <label for=\"checkbox-2\">Tue</label>\n";
-  webPage += "  <input type=\"checkbox\" name=\"checkbox-2\" id=\"checkbox-2\">\n";
-  webPage += "  <label for=\"checkbox-3\">Wed</label>\n";
-  webPage += "  <input type=\"checkbox\" name=\"checkbox-3\" id=\"checkbox-3\">\n";
-  webPage += "  <label for=\"checkbox-4\">Thu</label>\n";
-  webPage += "  <input type=\"checkbox\" name=\"checkbox-4\" id=\"checkbox-4\">\n";
-  webPage += "  <label for=\"checkbox-5\">Fri</label>\n";
-  webPage += "  <input type=\"checkbox\" name=\"checkbox-5\" id=\"checkbox-5\">\n";
-  webPage += "  <label for=\"checkbox-6\">Sat</label>\n";
-  webPage += "  <input type=\"checkbox\" name=\"checkbox-6\" id=\"checkbox-6\">\n";
-  webPage += "  <label for=\"checkbox-7\">Sun</label>\n";
-  webPage += "  <input type=\"checkbox\" name=\"checkbox-7\" id=\"checkbox-7\">\n";
+  webPage += "  <legend>Automatic switch ON/OFF:</legend>\n";
+
+  char* days[] = {"Mon","Tue","Wed","Thu","Fri","Sat","Sun"};
+  for (int i = 1; i <= 7; i++){
+    webPage += "  <label for=\"w-"+String(i)+"\">"+ String(days[i-1])+"</label>\n";
+    webPage += "  <input type=\"checkbox\" name=\"w-"+String(i)+"\" id=\"w-"+String(i)+"\" " + checked(i)+ ">\n";
+  }
+  
+  webPage += " </fieldset>\n";  
+  webPage += " <fieldset>\n";  
+  webPage += "  <label for=\"startHour\">Lights ON:</label> \n  <input id=\"startHour\" name=\"startHour\" value=\"";
+  webPage += String(hourOn)+"\"> \n";
+  webPage += "  <label for=\"endHour\">Lights OFF:</label> \n  <input id=\"endHour\" name=\"endHour\" value=\"";
+  webPage += String(hourOff)+"\"> \n";
   webPage += "</fieldset>\n";
 
   
-  webPage += "<a href=\"ScheduleSave\"><button class=\"btn btn-success btn-lg\">Save changes</button></a>\n";
-  webPage += "</div>\n";
+  webPage += "<fieldset>\n";
+  webPage += " <input type=\"submit\" value=\"Save changes\" class=\"btn btn-success btn-lg\"> \n";
+  //webPage += "<a href=\"ScheduleSave\"><button type=\"submit\" class=\"btn btn-success btn-lg\">Save changes</button></a>\n";
+  webPage += " </fieldset>\n";  
+  webPage += " </form>\n";
+  
+  webPage += " </div>\n";
   webPage += "</div>\n";
   
-  webPage += "<div style=\"font: arial;font-size: 12px;\"><p><iframe src=\"timer.conf\" width=200 height=400 frameborder=0 ></iframe></p></div>\n";  
+  //webPage += "<div style=\"font: arial;font-size: 12px;\"><p><iframe src=\"timer.conf\" width=200 height=400 frameborder=0 ></iframe></p></div>\n";  
   webPage += "</body>\n</html>\n";
+}
+
+String checked(int day){
+  if (daysScheduled.charAt(day) == '1'){
+    return "checked";    
+  } else {
+    return "";
+  }
 }
 
