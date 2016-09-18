@@ -9,7 +9,16 @@ void setup() {
   SPIFFS.begin();
   File f = SPIFFS.open("/timer.conf", "w");
   Serial.println("Creating a default one...");
+  f.println("#1");  
+  f.println("00000011");
+  f.println("18");
+  f.println("23");
+  f.println("#2");   
   f.println("01111111");
+  f.println("20");
+  f.println("2");
+  f.println("#3");    
+  f.println("01100111");
   f.println("20");
   f.println("2");
   

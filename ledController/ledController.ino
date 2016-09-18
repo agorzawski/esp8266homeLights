@@ -5,18 +5,15 @@
 #include <WiFiUdp.h>
 #include "FS.h"
 #include <string>
-#include <sstream>
+#include <list>
 
 MDNSResponder mdns;
-
+//local wifi settings
 const char* ssid = "a_r_o_2";
 const char* password = "Cern0wiec";
+//timer variables
 unsigned long epochTime;
 unsigned long lastCheckEpoch;
-int hourOn = 0;
-int hourOff = 1;
-String daysScheduled = "01111110";
-
 unsigned int localPort = 2390;      // local port to listen for UDP packets
 IPAddress timeServerIP; // time.nist.gov NTP server address
 const char* ntpServerName = "time.nist.gov";
@@ -24,27 +21,29 @@ const int NTP_PACKET_SIZE = 48; // NTP time stamp is in the first 48 bytes of th
 byte packetBuffer[ NTP_PACKET_SIZE]; //buffer to hold incoming and outgoing packets
 WiFiUDP udp; // A UDP instance to let us send and receive packets over UDP
 
-// outputs
-int dout [] = {4,5,0};
+// outputs and its configuration
+//todo change to some nice lists
+int dout[] = {4,5,0};
 boolean out[] = {false, false, false};
-int doutled=2;
+int hourOn[] = {0,0,0};
+int hourOff[] = {1,1,1};
+String daysScheduled[] = {"01111110","01111110","00000011"};
 
+int doutled=2;
 ESP8266WebServer server(80);
 String webPage = "";
-  
 void setup(void) {
   updateWebPageBody();
 
   // preparing GPIOs
-  pinMode(dout[0], OUTPUT);
-  digitalWrite(dout[0], LOW);
-  pinMode(dout[1], OUTPUT);
-  digitalWrite(dout[1], LOW);
-  pinMode(dout[2], OUTPUT);
-  digitalWrite(dout[2], LOW);
+
+  for (int i=0; i< sizeof(dout); i++){
+    pinMode(dout[i], OUTPUT);
+    digitalWrite(dout[i], LOW);
+  }
   pinMode(doutled, OUTPUT);
   digitalWrite(doutled, LOW);
-
+  
   delay(1000);
   Serial.begin(115200);
 
@@ -72,9 +71,18 @@ void setup(void) {
   if (!f) {
     Serial.println("File open failed!");
     Serial.println("Creating a default one...");
+    f.println("#1");  
+    f.println("00000011");
+    f.println("18");
+    f.println("23");
+    f.println("#2");   
     f.println("01111111");
     f.println("20");
     f.println("2");
+    f.println("#3");    
+    f.println("01100111");
+    f.println("20");
+    f.println("2"); 
     Serial.println("...DONE!");
     f.close();
     f = SPIFFS.open("/timer.conf", "r");
@@ -83,45 +91,53 @@ void setup(void) {
     f = SPIFFS.open("/timer.conf", "r");
     Serial.println("Config file exists!");
     Serial.println(f.name());
-    int lineCount=0;
+    int lineCount=-1;
+    int channelIndex=-1;
     while(f.available()) {
       //Lets read line by line from the file
       String line = f.readStringUntil('\n');
-      switch (lineCount){
-        case 0 : break;
-        case 1 : hourOn = line.toInt(); break;
-        case 2 : hourOff = line.toInt(); break;
-      }    
-      Serial.println(line);
+      Serial.println(line);      
       lineCount++;
+      if (lineCount % 4 == 0 ){
+              channelIndex++;
+              lineCount=0;
+              continue;
+      }
+      switch (lineCount){
+        case 1 : daysScheduled[channelIndex] = line; break;
+        case 2 : hourOn[channelIndex] = line.toInt(); break;
+        case 3 : hourOff[channelIndex] = line.toInt(); break;
+      }
     }
+    Serial.println("Configuration READ!");
   }
   f.close();
-  
+  SPIFFS.end();
   // Set HTML server responses
   server.on("/", []() {
     server.send(200, "text/html", webPage);
   });
 
   server.on("/ScheduleSave", HTTP_GET,  [](){
-    String hourOn_s=server.arg("startHour");
-    String hourOff_s=server.arg("endHour");
-    Serial.println("GET hourOn: " + hourOn_s);
-    hourOn = hourOn_s.toInt();
-    hourOff = hourOff_s.toInt();
-
-    char* days[] = {"w-1","w-2","w-3","w-4","w-5","w-6","w-7"};
-    String configString = "0";
-    for (String one: days){
-      String state=server.arg(one);
-      if (state == "on"){
-        configString += "1";
-      } else{
-        configString += "0";
+    String days[] = {"w-1","w-2","w-3","w-4","w-5","w-6","w-7"};
+    for (int ch = 0; ch < sizeof(out); ch++){    
+      String hourOn_s=server.arg("ch-"+String(ch)+"-startHour");
+      String hourOff_s=server.arg("ch-"+String(ch)+"-endHour");
+      Serial.println("GET hourOn: " + hourOn_s);
+      hourOn[ch] = hourOn_s.toInt();
+      hourOff[ch] = hourOff_s.toInt();    
+      String configString = "0";
+      for (String one: days){
+        String state=server.arg("ch-"+String(ch)+"-"+one);
+        if (state == "on"){
+          configString += "1";
+        } else{
+          configString += "0";
+        }
       }
+      daysScheduled[ch] = configString;  
     }
-    daysScheduled = configString;  
-    //saveFile(configString, hourOn, hourOff) ;
+    //saveFile(daysScheduled, hourOn, hourOff) ;
     updateWebPageBody();
     server.send(200, "text/html", webPage);
   });
@@ -137,8 +153,9 @@ void setup(void) {
     socketOn(2);  });
   server.on("/socket3Off", []() {
     socketOff(2); });
+    
   server.on("/allOn", []() {
-    for (int i=0; i<sizeof(dout);i++){
+    for (int i = 0; i < sizeof(out); i++){
       digitalWrite(dout[i], HIGH);
       out[i]=true;
     }
@@ -147,7 +164,7 @@ void setup(void) {
     Serial.println("All ON...");
   });
   server.on("/allOff", []() {
-    for (int i=0; i<sizeof(dout);i++){
+    for (int i = 0; i < sizeof(out); i++){
       digitalWrite(dout[i], LOW);
       out[i]=false;
     }
@@ -290,13 +307,14 @@ boolean isHourForTrigger(long epoch, int hour){
 void checkTimers(){
   long currentTime = epochTime + millis()/1000;
   if (currentTime - lastCheckEpoch > 10){
-
-    if (isHourForTrigger(currentTime, hourOn)){
-      Serial.println("Should switchOn lights!");
-    }
-
-    if (isHourForTrigger(currentTime, hourOff)){
-      Serial.println("Should switchOff lights!");
+    for (int ch = 0; ch < sizeof(out); ch++){
+      if (isHourForTrigger(currentTime, hourOn[ch])){
+        Serial.println("Should switchOn lights for Channel:"+String(ch));
+      }
+  
+      if (isHourForTrigger(currentTime, hourOff[ch])){
+        Serial.println("Should switchOff lights for Channel:"+String(ch));
+      }  
     }
     Serial.println("Time:" + timeToString(currentTime));
     lastCheckEpoch = currentTime;
@@ -305,6 +323,7 @@ void checkTimers(){
 
  
 void updateWebPageBody() {
+  String days[] = {"Mon","Tue","Wed","Thu","Fri","Sat","Sun"};
   webPage = "";
   webPage += "<!DOCTYPE HTML>\r\n<html>\n<head>\n";
   webPage += "<meta charset=\"utf-8\"> \n";
@@ -315,7 +334,7 @@ void updateWebPageBody() {
   webPage += "integrity=\"sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u\" crossorigin=\"anonymous\"> \n";
   webPage += " <script src=\"https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js\" ";
   webPage += "integrity=\"sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa\" crossorigin=\"anonymous\"></script> \n";
-  //
+  //jquery
   webPage += "  <link rel=\"stylesheet\" href=\"//code.jquery.com/ui/1.12.0/themes/base/jquery-ui.css\">\n";
   webPage += "  <link rel=\"stylesheet\" href=\"/resources/demos/style.css\">\n";
   webPage += "  <script src=\"https://code.jquery.com/jquery-1.12.4.js\"></script>\n";
@@ -327,28 +346,30 @@ void updateWebPageBody() {
   webPage += "</script>\n";
   webPage += "<script>\n";
   webPage += "$( function() {\n";
-  webPage  += "   $( \"#accordion\" ).accordion();\n";
+  webPage  += "   $( \"#tabs\" ).tabs();\n";
   webPage += "} );\n";
   webPage += "</script>\n";
   webPage += "</head>\n<body>\n";
   webPage += "<h1>Garden Lights v0.21 </h1>\n";
-  //Status
-  webPage += "<div id=\"accordion\">\n";
+
+  webPage += "<div id=\"tabs\">\n";
+  webPage +=  "<ul> <li><a href=\"#tabs-1\">Control</a></li><li><a href=\"#tabs-2\">Status</a></li>";
+  webPage += "  <li><a href=\"#tabs-3\">Config</a></li></ul>";
   // Controll
-  webPage += "<h2>Control: </h2>\n <div>\n";
+  webPage += "<div id=\"tabs-1\">\n";
   for (int i=0; i<sizeof(out); i++){  
     webPage += "<p> ";
     if (out[i]) {
-      webPage += " <a href=\"socket"+String(i+1)+"Off\"><button class=\"btn btn-danger btn-lg\">OFF Lights "+String(i+1)+" </button></a>\n";
+      webPage += " <a href=\"socket"+String(i+1)+"Off\"><button class=\"btn btn-danger btn-lg\">OFF Lights "+String(i+1)+" </button></a>";
     } else {
-      webPage += " <a href=\"socket"+String(i+1)+"On\"> <button class=\"btn btn-success btn-lg\">ON Lights "+String(i+1)+" </button></a>\n ";
+      webPage += " <a href=\"socket"+String(i+1)+"On\"> <button class=\"btn btn-success btn-lg\">ON Lights "+String(i+1)+" </button></a>";
     }
     webPage += "</p> \n";
   }
   webPage += "<p> <a href=\"allOn\">  <button class=\"btn btn-success btn-lg\">ON ALL</button></a> &nbsp; <a href=\"allOff\">  <button class=\"btn btn-danger btn-lg\">OFF ALL</button></a></p> \n";
   webPage += "</div>\n";
-
-  webPage += "<h2>Status: </h2>\n <div>\n";
+  //Status
+  webPage += "<div id=\"tabs-2\">\n";
   webPage += timeToString(epochTime) + "\n" ;
   for (int i=0; i < sizeof(out); i++){  
     if (out[i]) {
@@ -358,30 +379,31 @@ void updateWebPageBody() {
     }
   }
   webPage += "</div>\n";
-
-  webPage += "<h2>Configuration: </h2>\n<div>\n";
+  //Config
+  webPage += "<div id=\"tabs-3\">\n";
   webPage += "<form  action=\"ScheduleSave\" method=\"get\">\n";
-  webPage += "<fieldset>\n";
-  webPage += "  <legend>Automatic switch ON/OFF:</legend>\n";
-
-  char* days[] = {"Mon","Tue","Wed","Thu","Fri","Sat","Sun"};
-  for (int i = 1; i <= 7; i++){
-    webPage += "  <label for=\"w-"+String(i)+"\">"+ String(days[i-1])+"</label>\n";
-    webPage += "  <input type=\"checkbox\" name=\"w-"+String(i)+"\" id=\"w-"+String(i)+"\" " + checked(i)+ ">\n";
+  for (int ch = 0; ch < sizeof(out); ch++){
+      webPage += "<fieldset>\n";
+      webPage += "  <legend>Automatic switch ON/OFF for CHANNEL "+String(ch+1)+":</legend>\n";     
+      for (int i = 1; i <= 7; i++){
+        webPage += "  <label for=\"ch-"+String(ch)+"-w-"+String(i)+"\">"+ String(days[i-1])+"</label>\n";
+        webPage += "  <input type=\"checkbox\" name=\"ch-"+String(ch)+"-w-"+String(i)+"\" id=\"ch-";
+        webPage +=String(ch)+"-w-"+String(i)+"\" " + checked(ch,i)+ "/>\n";
+      }      
+      webPage += " </fieldset>\n";  
+      
+      webPage += " <fieldset>\n";  
+      webPage += "  <label for=\"ch-"+String(ch)+"-startHour\">Lights ON:</label> \n  <input id=\"ch-";
+      webPage += String(ch)+"-startHour\" name=\"ch-"+String(ch)+"-startHour\" value=\"";
+      webPage += String(hourOn[ch])+"\"/> \n";
+      webPage += "  <label for=\"ch-"+String(ch)+"-endHour\">Lights OFF:</label> \n  <input id=\"ch-";
+      webPage +=String(ch)+"-endHour\" name=\"ch-"+String(ch)+"-endHour\" value=\"";
+      webPage += String(hourOff[ch])+"\"/> \n";
+      webPage += "</fieldset>\n";
   }
   
-  webPage += " </fieldset>\n";  
-  webPage += " <fieldset>\n";  
-  webPage += "  <label for=\"startHour\">Lights ON:</label> \n  <input id=\"startHour\" name=\"startHour\" value=\"";
-  webPage += String(hourOn)+"\"> \n";
-  webPage += "  <label for=\"endHour\">Lights OFF:</label> \n  <input id=\"endHour\" name=\"endHour\" value=\"";
-  webPage += String(hourOff)+"\"> \n";
-  webPage += "</fieldset>\n";
-
-  
   webPage += "<fieldset>\n";
-  webPage += " <input type=\"submit\" value=\"Save changes\" class=\"btn btn-success btn-lg\"> \n";
-  //webPage += "<a href=\"ScheduleSave\"><button type=\"submit\" class=\"btn btn-success btn-lg\">Save changes</button></a>\n";
+  webPage += " <input type=\"submit\" value=\"Save changes\" class=\"btn btn-success btn-lg\"/> \n";
   webPage += " </fieldset>\n";  
   webPage += " </form>\n";
   
@@ -392,8 +414,12 @@ void updateWebPageBody() {
   webPage += "</body>\n</html>\n";
 }
 
-String checked(int day){
-  if (daysScheduled.charAt(day) == '1'){
+void saveFile(String days[], int hourOn[], int hourOff[]){
+  
+}
+
+String checked(int channel, int day){
+  if (daysScheduled[channel].charAt(day) == '1'){
     return "checked";    
   } else {
     return "";
