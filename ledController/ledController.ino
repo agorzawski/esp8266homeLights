@@ -3,9 +3,10 @@
 #include <ESP8266WebServer.h>
 #include <ESP8266mDNS.h>
 #include <WiFiUdp.h>
-#include "FS.h"
-#include <string>
-#include <list>
+#include <FS.h>
+
+//#include "TimerOnChannel.h"
+
 
 MDNSResponder mdns;
 //local wifi settings
@@ -23,11 +24,15 @@ WiFiUDP udp; // A UDP instance to let us send and receive packets over UDP
 
 // outputs and its configuration
 //todo change to some nice lists
-int dout[] = {4,5,0};
+int dout[] = {4, 5, 0};
+//TimerOnChanner[] channels = {TimerOnChanner(4), TimerOnChanner(5),TimerOnChanner(0)};
+
 boolean out[] = {false, false, false};
 int hourOn[] = {0,0,0};
 int hourOff[] = {1,1,1};
 String daysScheduled[] = {"01111110","01111110","00000011"};
+
+//vector<TimerOnChanner> channels;
 
 int doutled=2;
 ESP8266WebServer server(80);
@@ -36,11 +41,11 @@ void setup(void) {
   updateWebPageBody();
 
   // preparing GPIOs
-
   for (int i=0; i< sizeof(dout); i++){
     pinMode(dout[i], OUTPUT);
     digitalWrite(dout[i], LOW);
   }
+  
   pinMode(doutled, OUTPUT);
   digitalWrite(doutled, LOW);
   
@@ -381,6 +386,8 @@ void updateWebPageBody() {
   webPage += "</div>\n";
   //Config
   webPage += "<div id=\"tabs-3\">\n";
+  
+  // form breaks the bootstrap/jquery style 
   webPage += "<form  action=\"ScheduleSave\" method=\"get\">\n";
   for (int ch = 0; ch < sizeof(out); ch++){
       webPage += "<fieldset>\n";
@@ -425,4 +432,5 @@ String checked(int channel, int day){
     return "";
   }
 }
+
 
