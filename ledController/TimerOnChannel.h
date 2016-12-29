@@ -6,6 +6,7 @@ class TimerOnChannel
 {
   public:
     TimerOnChannel(int pin);
+    
     void configure(int hourOn, int hourOff, String dayPattern);
     boolean isForesseenToBeActive(long timeInMillis);
     

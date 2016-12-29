@@ -2,11 +2,12 @@
 #include <WiFiClient.h>
 #include <ESP8266WebServer.h>
 #include <ESP8266mDNS.h>
-#include <WiFiUdp.h>
+//#include <WiFiUdp.h>
 #include <FS.h>
+#include <vector>
 
-//#include "TimerOnChannel.h"
-
+#include "TimerOnChannel.h"
+#include "TimeService.h"
 
 MDNSResponder mdns;
 //local wifi settings
@@ -15,24 +16,23 @@ const char* password = "Cern0wiec";
 //timer variables
 unsigned long epochTime;
 unsigned long lastCheckEpoch;
-unsigned int localPort = 2390;      // local port to listen for UDP packets
-IPAddress timeServerIP; // time.nist.gov NTP server address
-const char* ntpServerName = "time.nist.gov";
-const int NTP_PACKET_SIZE = 48; // NTP time stamp is in the first 48 bytes of the message
-byte packetBuffer[ NTP_PACKET_SIZE]; //buffer to hold incoming and outgoing packets
-WiFiUDP udp; // A UDP instance to let us send and receive packets over UDP
+
+//unsigned int localPort = 2390;      // local port to listen for UDP packets
+//IPAddress timeServerIP; // time.nist.gov NTP server address
+//const char* ntpServerName = "time.nist.gov";
+//const int NTP_PACKET_SIZE = 48; // NTP time stamp is in the first 48 bytes of the message
+//byte packetBuffer[ NTP_PACKET_SIZE]; //buffer to hold incoming and outgoing packets
+//WiFiUDP udp; // A UDP instance to let us send and receive packets over UDP
 
 // outputs and its configuration
 //todo change to some nice lists
 int dout[] = {4, 5, 0};
-//TimerOnChanner[] channels = {TimerOnChanner(4), TimerOnChanner(5),TimerOnChanner(0)};
+std::vector<TimerOnChannel> channels = {TimerOnChannel(4), TimerOnChannel(5), TimerOnChannel(0)};
 
 boolean out[] = {false, false, false};
-int hourOn[] = {0,0,0};
-int hourOff[] = {1,1,1};
+int hourOn[] =  {18, 17, 0};
+int hourOff[] = {20, 0, 1};
 String daysScheduled[] = {"01111110","01111110","00000011"};
-
-//vector<TimerOnChanner> channels;
 
 int doutled=2;
 ESP8266WebServer server(80);
@@ -41,11 +41,11 @@ void setup(void) {
   updateWebPageBody();
 
   // preparing GPIOs
-  for (int i=0; i< sizeof(dout); i++){
-    pinMode(dout[i], OUTPUT);
-    digitalWrite(dout[i], LOW);
-  }
-  
+//  for (int i=0; i< sizeof(dout); i++){
+//    pinMode(dout[i], OUTPUT);
+//    digitalWrite(dout[i], LOW);
+//  }
+
   pinMode(doutled, OUTPUT);
   digitalWrite(doutled, LOW);
   
@@ -185,19 +185,24 @@ void setup(void) {
 
   server.begin();
   Serial.println("HTTP server started");
-  Serial.println("Starting UDP");
-  udp.begin(localPort);
-  Serial.print("Local port: ");
-  Serial.println(udp.localPort());
-  epochTime = getTime();
-  Serial.print("Internal clock for reference: ");
-  Serial.println(millis());
+
+
+   TimeService timeService;
+   epochTime = timeService.getTime();
+   lastCheckEpoch = epochTime;
 }
 
 void loop(void) {
   blinkStatusLED(1000, 1000);
   checkTimers();
   server.handleClient();
+}
+
+void blinkStatusLED(int high, int low) {
+  digitalWrite(doutled, HIGH);
+  delay(high);
+  digitalWrite(doutled, LOW);
+  delay(low);
 }
 
 void socketOn(int i){
@@ -217,94 +222,6 @@ void socketOff(int i){
   server.send(200, "text/html", webPage);
 }
 
-void blinkStatusLED(int high, int low) {
-  digitalWrite(doutled, HIGH);
-  delay(high);
-  digitalWrite(doutled, LOW);
-  delay(low);
-}
-
-// send an NTP request to the time server at the given address
-unsigned long sendNTPpacket(IPAddress& address)
-{
-  Serial.println("sending NTP packet...");
-  // set all bytes in the buffer to 0
-  memset(packetBuffer, 0, NTP_PACKET_SIZE);
-  // Initialize values needed to form NTP request
-  // (see URL above for details on the packets)
-  packetBuffer[0] = 0b11100011;   // LI, Version, Mode
-  packetBuffer[1] = 0;     // Stratum, or type of clock
-  packetBuffer[2] = 6;     // Polling Interval
-  packetBuffer[3] = 0xEC;  // Peer Clock Precision
-  // 8 bytes of zero for Root Delay & Root Dispersion
-  packetBuffer[12]  = 49;
-  packetBuffer[13]  = 0x4E;
-  packetBuffer[14]  = 49;
-  packetBuffer[15]  = 52;
-  // all NTP fields have been given values, now
-  // you can send a packet requesting a timestamp:
-  udp.beginPacket(address, 123); //NTP requests are to port 123
-  udp.write(packetBuffer, NTP_PACKET_SIZE);
-  udp.endPacket();
-}
-
-
-unsigned long getTime() {
-  //get a random server from the pool
-  WiFi.hostByName(ntpServerName, timeServerIP);
-  unsigned long epoch = 1;
-  sendNTPpacket(timeServerIP); // send an NTP packet to a time server
-  // wait to see if a reply is available
-  delay(2000);
-  
-  int cb = udp.parsePacket();
-  if (!cb) {
-    Serial.println("no packet yet");
-  }
-  else {
-    Serial.print("packet received, length=");
-    Serial.println(cb);
-    // We've received a packet, read the data from it
-    udp.read(packetBuffer, NTP_PACKET_SIZE); // read the packet into the buffer
-
-    //the timestamp starts at byte 40 of the received packet and is four bytes,
-    // or two words, long. First, esxtract the two words:
-
-    unsigned long highWord = word(packetBuffer[40], packetBuffer[41]);
-    unsigned long lowWord = word(packetBuffer[42], packetBuffer[43]);
-    // combine the four bytes (two words) into a long integer
-    // this is NTP time (seconds since Jan 1 1900):
-    unsigned long secsSince1900 = highWord << 16 | lowWord;
-    Serial.print("Seconds since Jan 1 1900 = " );
-    Serial.println(secsSince1900);
-
-    // now convert NTP time into everyday time:
-    Serial.print("Unix time = ");
-    // Unix time starts on Jan 1 1970. In seconds, that's 2208988800:
-    const unsigned long seventyYears = 2208988800UL;
-    // subtract seventy years:
-    epoch = secsSince1900 - seventyYears;
-    // print Unix time:
-    Serial.println(epoch);
-    Serial.println(timeToString(epoch));
-  }
-  lastCheckEpoch = epoch;
-  return epoch;
-}
-
-String timeToString(unsigned long epoch){
-    String oss = "UTC: " + String(((epoch  % 86400L) / 3600)) + ":";
-    if ( ((epoch % 3600) / 60) < 10 ) {
-      oss += "0";
-    }
-    oss +=  String( ((epoch  % 3600) / 60) ) + ":"; 
-    if ( (epoch % 60) < 10 ) {
-      oss+= "0";
-    }
-    oss +=  String((epoch % 60)); 
-    return oss; 
-}
-
 boolean isHourForTrigger(long epoch, int hour){
   return ((epoch  % 86400L) / 3600) == hour;
 }
@@ -321,7 +238,7 @@ void checkTimers(){
         Serial.println("Should switchOff lights for Channel:"+String(ch));
       }  
     }
-    Serial.println("Time:" + timeToString(currentTime));
+    Serial.println("Time:" + TimeService::timeToString(currentTime));
     lastCheckEpoch = currentTime;
   }
 }
@@ -375,7 +292,7 @@ void updateWebPageBody() {
   webPage += "</div>\n";
   //Status
   webPage += "<div id=\"tabs-2\">\n";
-  webPage += timeToString(epochTime) + "\n" ;
+  webPage += TimeService::timeToString(epochTime) + "\n" ;
   for (int i=0; i < sizeof(out); i++){  
     if (out[i]) {
       webPage += " <p class=\"bg-success\">Lights "+String(i+1)+" are ON</p>\n";
@@ -422,7 +339,7 @@ void updateWebPageBody() {
 }
 
 void saveFile(String days[], int hourOn[], int hourOff[]){
-  
+  // todo
 }
 
 String checked(int channel, int day){
