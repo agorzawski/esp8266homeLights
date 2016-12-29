@@ -5,16 +5,26 @@
 class TimerOnChannel
 {
   public:
-    TimerOnChannel(int pin);
-    
+    TimerOnChannel(int pin, String label);
     void configure(int hourOn, int hourOff, String dayPattern);
+    
+    void setOn();
+    void setOff();
+    int hourOn();
+    int hourOff();
+    boolean isOn();
+    String getLabel();
     boolean isForesseenToBeActive(long timeInMillis);
+    void printStatus();
     
   private:
+    int _pin;
     int _hourOn = -1;
     int _hourOff = -1;
+    boolean _isOn = false;
     String _dayPattern = "11111111";
-    int _pin;
+    String _label = "Lights";
+    static int getNbOfHours(long timeInMillis);
 };
 
 #endif

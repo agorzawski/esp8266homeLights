@@ -3,6 +3,7 @@
 
 
 TimeService::TimeService(){
+  Serial.println("---=== Starting TimeService ===---");
   Serial.println("Starting UDP");
   udp.begin(localPort);
   Serial.print("Local port: ");
@@ -12,7 +13,7 @@ TimeService::TimeService(){
   Serial.println(timeToString(epochTime));
   Serial.print("Internal clock for reference: ");
   Serial.println(millis());
-
+  Serial.println("---=== TimeService STARTED ===---");
 }
 
 // send an NTP request to the time server at the given address
