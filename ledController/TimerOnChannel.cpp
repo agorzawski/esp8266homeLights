@@ -100,7 +100,7 @@ void TimerOnChannel::adaptStateToConfigurationFor(long timeInMillis)
     {
         digitalWrite(_pin, LOW);
         _isOn = false;
-        // switch off and restore auto mode if after ultimate off!
+        // switch off and restore auto mode if after ultimate off time!
         if (getNbOfHours(timeInMillis) >= _hourUltimateOff)
         {
           _manual = false;
@@ -115,6 +115,7 @@ boolean TimerOnChannel::isForeseenToBeActive(long timeInMillis)
   if (_manual)
   {
     return (nbOfHours < _hourUltimateOff);
+    //TODO for the time being only simple thing like that, add more clever things for after midnight deadline
   } else // in auto mode
   {
     return ((nbOfHours >= _hourOn) &&  (nbOfHours < _hourOff));  
