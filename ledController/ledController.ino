@@ -14,22 +14,23 @@
 MDNSResponder mdns;
 ESP8266WebServer server(80);
 String webPage = "";
-//local wifi settings
 const char* ssid = "a_r_o_2";
 const char* password = "Cern0wiec";
-unsigned long epochTime;
-unsigned long lastCheckEpoch;
+unsigned long acqEpochTimeFromService;
+unsigned long lastCheckTimestamp;
+unsigned long currentTime;
 
 //initial values;
-int hourOn[] =  {16, 17, -1, -1};
-int hourOff[] = {17, 23, -1, -1};
-String daysScheduled[] = {"01111110","01111110","00000011","00000011"};
+int hourOn[] =  {11, 17, 0, 0};
+int hourOff[] = {14, 24, 0, 0};
+int hourUltimateOff[] = {24, 14, 0, 0};
+String daysScheduled[] = {"0000111","01111110","00000011","00000011"};
 std::vector<TimerOnChannel> channels;
 
 void setup(void) {
   Serial.println("---=== SYSTEM STARTUP... ===----");
   //D0 - 4, D1 - 5, D3 - 0, D4 - 2 (LED), D5 - 14, D6 - 12, D7 - 13, D8 - 15;
-  channels = {TimerOnChannel(4,"Terace LED"), TimerOnChannel(5,"Tree lights"), TimerOnChannel(0,"Wall home"), TimerOnChannel(14,"Wall garden")};
+  channels = {TimerOnChannel(4,"Terace LEDs"), TimerOnChannel(5,"Tree lights"), TimerOnChannel(0,"Wall home"), TimerOnChannel(14,"Wall garden")};
   pinMode(LED_PIN, OUTPUT);
   digitalWrite(LED_PIN, LOW);
   delay(1000);
@@ -71,47 +72,41 @@ void startHttpService()
 {
   Serial.println("---=== HTTP server starting... ===----");
   server.on("/", []() {      
-    updateContentAndResponses();
+    updateWebContentAndResponse();
     });
-  server.on("/socket1On", []() {
-    channels.at(0).setOn();
-    updateContentAndResponses();
-    });
-  server.on("/socket1Off", []() {
-    channels.at(0).setOff();
-    updateContentAndResponses();
-    });
-  server.on("/socket2On", []() {
-    channels.at(1).setOn();
-    updateContentAndResponses();
-    });
-  server.on("/socket2Off", []() {
-    channels.at(1).setOff();
-    updateContentAndResponses();
-    });
-  server.on("/socket3On", []() {
-    channels.at(2).setOn();
-    updateContentAndResponses();
-    });
-  server.on("/socket3Off", []() {
-    channels.at(2).setOff();
-    updateContentAndResponses();
-    });    
+  server.on("/socket1On", []() { setOn(channels[0], true);});
+  server.on("/socket1Off", []() { setOff(channels[0], true);});
+  server.on("/socket1AutoOn", []() { channels[0].restoreAuto(); updateWebContentAndResponse();});
+  server.on("/socket2On", []() { setOn(channels[1], true);});
+  server.on("/socket2Off", []() { setOff(channels[1], true); });
+  server.on("/socket2AutoOn", []() { channels[1].restoreAuto(); updateWebContentAndResponse();});
+  server.on("/socket3On", []() { setOn(channels[2], true); });
+  server.on("/socket3Off", []() { setOff(channels[2], true); });   
+  server.on("/socket3AutoOn", []() { channels[2].restoreAuto(); updateWebContentAndResponse();}); 
+  server.on("/socket4On", []() { setOn(channels[3], true); });
+  server.on("/socket4Off", []() { setOff(channels[3], true); });    
+  server.on("/socket4AutoOn", []() { channels[3].restoreAuto(); updateWebContentAndResponse();});
   server.on("/allOn", []() {
     for (TimerOnChannel& channel : channels){
-      channel.setOn();
+      channel.setOn(true);
     }
-    updateContentAndResponses();
+    updateWebContentAndResponse();
   });
   server.on("/allOff", []() {
     for (TimerOnChannel& channel : channels){
-      channel.setOff();
+      channel.setOff(true);
     }
-    updateContentAndResponses();
+    updateWebContentAndResponse();
+  });
+  server.on("/allAutoOn", []() { 
+    for (TimerOnChannel& channel : channels){
+      channel.restoreAuto();
+    }  
+    updateWebContentAndResponse();
   });
   server.on("/resetTime", []() {
     startTimeService();
-    updateContentAndResponses();
+    updateWebContentAndResponse();
   });
   server.on("/ScheduleSave", HTTP_GET,  [](){
     String days[] = {"w-1","w-2","w-3","w-4","w-5","w-6","w-7"};
@@ -121,7 +116,8 @@ void startHttpService()
     {   
       String hourOn_s = server.arg("ch-"+String(index)+"-startHour");
       String hourOff_s = server.arg("ch-"+String(index)+"-endHour");
-      Serial.println("GET hourOn: " + hourOn_s);
+      String hourUltimateOff_s = server.arg("ch-"+String(index)+"-endUltimateHour");
+      String label = server.arg("ch-"+String(index)+"-name");
       String configString = "0";
       for (String one: days){
         String state=server.arg("ch-"+String(index)+"-"+one);
@@ -132,7 +128,8 @@ void startHttpService()
         }
       }
       Serial.println("-- Channel ("+channel.getLabel()+") internal index: "+ String(index) + " --");
-      channel.configure(hourOn_s.toInt(), hourOff_s.toInt(), configString);
+      channel.configure(hourOn_s.toInt(), hourOff_s.toInt(),hourUltimateOff_s.toInt(), configString);
+      channel.updateLabel(label);
       channel.printStatus();
       index++;
     }
@@ -140,22 +137,35 @@ void startHttpService()
     //TODO
     //saveFile(daysScheduled, hourOn, hourOff) ;
     //update Timers objects!
-    updateContentAndResponses();
+    updateWebContentAndResponse();
   });
   server.begin();
   Serial.println("---=== HTTP server started ===----");
 }
 
+void setOn(TimerOnChannel& channel, boolean manual)
+{
+  channel.setOn(manual);
+  updateWebContentAndResponse();
+}
+
+void setOff(TimerOnChannel& channel, boolean manual)
+{
+  channel.setOff(manual);
+  updateWebContentAndResponse();
+}
+
+
 void startTimeService()
 {
   Serial.println("---=== TIME SYSTEMS ===----");
   TimeService timeService;
-  epochTime = timeService.getTime();
-  lastCheckEpoch = epochTime;
+  acqEpochTimeFromService = timeService.getTime();
+  lastCheckTimestamp = acqEpochTimeFromService;
   Serial.println("---=== TIME SYSTEMS UP ===----");
 }
 
-void updateContentAndResponses()
+void updateWebContentAndResponse()
 {
    updateWebPageBody();
    server.send(200, "text/html", webPage);
@@ -171,20 +181,14 @@ void blinkStatusLED(int high, int low)
 
 void checkTimers()
 {
-  long currentTime = epochTime + millis()/1000;
-  if (currentTime - lastCheckEpoch > CHECK_INTERVAL_IN_SECONDS){
-    int index = 0;
-    for (TimerOnChannel& channel : channels){
-      if (channel.isForesseenToBeActive(currentTime))
-      {
-        if (!channel.isOn()) channel.setOn();
-      } else 
-      {
-        if (channel.isOn()) channel.setOff();
-      }
-      index++;
+  currentTime = acqEpochTimeFromService + millis()/1000;
+  if (currentTime - lastCheckTimestamp > CHECK_INTERVAL_IN_SECONDS)
+  {
+    for (TimerOnChannel& channel : channels)
+    {
+     channel.adaptStateToConfigurationFor(currentTime);
+     lastCheckTimestamp = currentTime;
     }
-    lastCheckEpoch = currentTime;
   }
 }
 
@@ -198,66 +202,78 @@ void updateWebPageBody()
   webPage += "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n";
   webPage += "<title>HOME LIGHTS Arduino</title>\n";
   //bootstrap
-  webPage += "<link rel=\"stylesheet\" href=\"https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css\" ";
-  webPage += "integrity=\"sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u\" crossorigin=\"anonymous\"> \n";
-  webPage += " <script src=\"https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js\" ";
-  webPage += "integrity=\"sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa\" crossorigin=\"anonymous\"></script> \n";
-  //jquery
-  webPage += "  <link rel=\"stylesheet\" href=\"//code.jquery.com/ui/1.12.0/themes/base/jquery-ui.css\">\n";
-  webPage += "  <link rel=\"stylesheet\" href=\"/resources/demos/style.css\">\n";
-  webPage += "  <script src=\"https://code.jquery.com/jquery-1.12.4.js\"></script>\n";
-  webPage += "  <script src=\"https://code.jquery.com/ui/1.12.0/jquery-ui.js\"></script>\n";
-  webPage += "<script>\n";
-  webPage += "$( function() {\n";
-  webPage  += "   $( \"input\" ).checkboxradio();\n";
-  webPage += "} );\n";
-  webPage += "</script>\n";
-  webPage += "<script>\n";
-  webPage += "$( function() {\n";
-  webPage  += "   $( \"#tabs\" ).tabs();\n";
-  webPage += "} );\n";
-  webPage += "</script>\n";
-  webPage += "</head>\n<body>\n";
-  webPage += "<h1>Garden Lights v0.21 </h1>\n";
+  webPage += "<link rel=\"stylesheet\" href=\"https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css\">\n";
+              
+  webPage += "<script src=\"https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js\"></script>\n";
+  webPage += "<script src=\"https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js\"></script>\n"; 
 
-  webPage += "<div id=\"tabs\">\n";
-  webPage +=  "<ul> <li><a href=\"#tabs-1\">Control</a></li><li><a href=\"#tabs-2\">Status</a></li>";
-  webPage += "  <li><a href=\"#tabs-3\">Config</a></li></ul>";
-  // Controll
-  webPage += "<div id=\"tabs-1\">\n";
+  webPage += "</head>\n<body>\n <div style=\"max-width: 600px;\"> \n";
+  
+  webPage += "<button class=\"btn btn-default btn-block disabled\"><h1>Garden Lights v0.23</h1></button> \n";
+  webPage += "<button type=\"button\" class=\"btn btn-default btn-block disabled \"><small> Last timer check: "+TimeService::timeToString(lastCheckTimestamp, 1)+"</small></button>";  
+  
+  webPage += "<div class=\"btn-group btn-group-justified\">";
+  webPage += "<a href=\"/\" class=\"btn btn-info btn-sm\">Refresh</a>";
+  webPage += "<a href=\"resetTime\" class=\"btn btn-default btn-sm\">Re-establish time</a>";
+  webPage += "</div>\n";
+
+  webPage += "\n";
+  webPage +=  "<ul class=\"nav nav-tabs\">";
+  webPage +=  "<li class=\"active\"><a data-toggle=\"tab\" href=\"#tabs-1\">Control</a></li>";
+  webPage += "<li><a data-toggle=\"tab\"  href=\"#tabs-2\">Status</a></li>";
+  webPage += " <li><a data-toggle=\"tab\" href=\"#tabs-3\">Config</a></li>\n </ul>\n";
+  // Control
+  webPage += "<div class=\"tab-content\">\n";
+  webPage += "<div id=\"tabs-1\" class=\"tab-pane fade in active\">\n";
   
   int i = 0;
+  int countInManual = 0;
   for (TimerOnChannel& channel : channels)
   {  
-    webPage += "<p> ";
+    webPage += "<p>  <div class=\"btn-group btn-group-justified\">";
     if (channel.isOn())
     {
-      webPage += " <a href=\"socket"+String(i+1)+"Off\"><button class=\"btn btn-danger btn-lg\">OFF Lights "+channel.getLabel()+" </button></a>";
+      webPage += " <a href=\"socket"+String(i+1)+"Off\" class=\"btn btn-danger btn-sm\">OFF "+channel.getLabel()+" </a>";
     } else {
-      webPage += " <a href=\"socket"+String(i+1)+"On\"> <button class=\"btn btn-success btn-lg\">ON Lights "+channel.getLabel()+" </button></a>";
+      webPage += " <a href=\"socket"+String(i+1)+"On\" class=\"btn btn-success btn-sm\">ON "+channel.getLabel()+" </a>";
     }
-    webPage += "</p> \n";
+  
+    if (channel.isManuallyEnabled())
+    {
+      countInManual++;
+      webPage += " <a href=\"socket"+String(i+1)+"AutoOn\" class=\"btn btn-warning btn-sm\">Restore auto control</a>";
+    } else {
+      webPage += " <a href=\"\" class=\"btn btn-info btn-sm disabled\">Automatic control</a>";
+    }
+
+    webPage += "</div></p> \n";
     i++;
   }
-  webPage += "<p> <a href=\"allOn\">  <button class=\"btn btn-success btn-lg\">ON ALL</button></a> &nbsp; <a href=\"allOff\">  <button class=\"btn btn-danger btn-lg\">OFF ALL</button></a></p> \n";
+  webPage += "<div class=\"btn-group btn-group-justified\"> <a href=\"allOn\" class=\"btn btn-success btn-lg\">ON ALL</a> <a href=\"allOff\" class=\"btn btn-danger btn-lg\">OFF ALL</a>";
+  if (countInManual > 1)
+  {
+    webPage += "<a href=\"allAutoOn\" class=\"btn btn-warning btn-lg\">AUTO ALL</a>";
+  }
+  webPage +="</div>\n";
   webPage += "</div>\n";
-  //Status
-  webPage += "<div id=\"tabs-2\">\n";
-  webPage += TimeService::timeToString(epochTime) + "\n" ;
+//  Status
+  webPage += "<div id=\"tabs-2\" class=\"tab-pane fade in\"><h3>Detailed status</h3>\n";
+  webPage += "<button type=\"button\" class=\"btn btn-default btn-block disabled \"><small> System start: "+TimeService::timeToString(acqEpochTimeFromService, 1)+"</small></button>";  
+  webPage += "<button type=\"button\" class=\"btn btn-default btn-block disabled \"><small> Last timer check: "+TimeService::timeToString(lastCheckTimestamp, 1)+"</small></button>";  
   i = 0;
   for (TimerOnChannel& channel : channels)
   {  
     if (channel.isOn()) 
     {
-      webPage += " <p class=\"bg-success\">Lights "+channel.getLabel()+" are ON</p>\n";
+      webPage += " <p class=\"bg-success\">"+channel.getLabel()+" are ON</p>\n";
     } else {
-      webPage += " <p class=\"bg-danger\">Lights "+channel.getLabel()+" are OFF</p>\n";
+      webPage += " <p class=\"bg-danger\">"+channel.getLabel()+" are OFF</p>\n";
     }
     i++;
   }
   webPage += "</div>\n";
   //Config
-  webPage += "<div id=\"tabs-3\">\n";
+  webPage += "<div id=\"tabs-3\" class=\"tab-pane fade in\">\n";
   // form breaks the bootstrap/jquery style 
   webPage += "<form  action=\"ScheduleSave\" method=\"get\">\n";
   int ch = 0;
@@ -274,14 +290,20 @@ void updateWebPageBody()
       webPage += " <fieldset>\n";  
       
       webPage += "  <label>Channel name:</label> \n  <input id=\"ch-";
-      webPage += String(ch)+"-name\" name=\"ch-"+String(ch)+"-name\" value=\"" +channel.getLabel()+ "\"/> \n";
+      webPage += String(ch)+"-name\" name=\"ch-"+String(ch)+"-name\" value=\"" +channel.getLabel()+ "\"/><br> \n";
       
       webPage += "  <label for=\"ch-"+String(ch)+"-startHour\">Lights ON:</label> \n  <input id=\"ch-";
       webPage += String(ch)+"-startHour\" name=\"ch-"+String(ch)+"-startHour\" value=\"";
-      webPage += String(channel.hourOn())+"\"/> \n";
+      webPage += String(channel.hourOn())+"\"/><br> \n";
+      
       webPage += "  <label for=\"ch-"+String(ch)+"-endHour\">Lights OFF:</label> \n  <input id=\"ch-";
       webPage +=String(ch)+"-endHour\" name=\"ch-"+String(ch)+"-endHour\" value=\"";
-      webPage += String(channel.hourOff())+"\"/> \n";
+      webPage += String(channel.hourOff())+"\"/><br> \n";
+
+      webPage += "  <label for=\"ch-"+String(ch)+"-endUltimateHour\">Lights ALWAYS OFF:</label> \n  <input id=\"ch-";
+      webPage +=String(ch)+"-endUltimateHour\" name=\"ch-"+String(ch)+"-endUltimateHour\" value=\"";
+      webPage += String(channel.hourUltimateOff())+"\"/><br> \n";
+      
       webPage += "</fieldset>\n";
       ch++;
   }
@@ -290,12 +312,12 @@ void updateWebPageBody()
   webPage += "   <input type=\"submit\" value=\"Save changes\" class=\"btn btn-success btn-lg\"/> \n";
   webPage += "  </fieldset>\n";  
   webPage += " </form>\n";
-  webPage += " <p> <a href=\"resetTime\"> <button class=\"btn btn-success btn-lg\">Re-establish time</button></a></p> \n";
+  
   webPage += " </div>\n";
   webPage += "</div>\n";
   
   //webPage += "<div style=\"font: arial;font-size: 12px;\"><p><iframe src=\"timer.conf\" width=200 height=400 frameborder=0 ></iframe></p></div>\n";  
-  webPage += "</body>\n</html>\n";
+  webPage += "</div>\n</body>\n</html>\n";
 }
 
 void saveFile(std::vector<TimerOnChannel> channels){
@@ -303,7 +325,8 @@ void saveFile(std::vector<TimerOnChannel> channels){
 }
 
 String checked(int channel, int day){
-  if (daysScheduled[channel].charAt(day) == '1'){
+  if (daysScheduled[channel].charAt(day) == '1')
+  {
     return "checked";    
   } else {
     return "";
@@ -316,8 +339,8 @@ void configureChannels()
   Serial.println("---=== Configuring channels: START ===----");
   int index = 0;
   for (TimerOnChannel& channel : channels){
-    Serial.println("--== Channel index: "+ String(index) + " ==--");
-    channel.configure(hourOn[index], hourOff[index], daysScheduled[index]);
+    Serial.println("--== Channel ("+channel.getLabel()+") index: "+ String(index) + " ==--");
+    channel.configure(hourOn[index], hourOff[index], hourUltimateOff[index], daysScheduled[index]);
     channel.printStatus();
     index++;
   }
@@ -326,7 +349,7 @@ void configureChannels()
 
 void openConfiguration()
 {
-    SPIFFS.begin();
+  SPIFFS.begin();
   File f = SPIFFS.open("/timer.conf", "w");
   if (!f) {
     Serial.println("File open failed!");

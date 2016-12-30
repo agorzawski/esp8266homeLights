@@ -10,11 +10,11 @@
 class TimeService
 {
 
-
   public:
-    TimeService();
-    static String timeToString(unsigned long epoch);
+    TimeService();    
     unsigned long getTime();
+
+    static String timeToString(unsigned long epoch, int dst);
 
   private:
     unsigned long sendNTPpacket(IPAddress& address);

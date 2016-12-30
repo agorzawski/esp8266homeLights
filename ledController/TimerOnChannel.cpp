@@ -5,7 +5,7 @@ TimerOnChannel::TimerOnChannel(int pin, String label)
 {
    _pin = pin;
    pinMode(pin, OUTPUT);
-   setOff();
+   setOff(false);
    _label = label;
 }
 
@@ -14,14 +14,21 @@ String TimerOnChannel::getLabel()
   return _label;
 }
 
-void TimerOnChannel::setOn()
+void TimerOnChannel::updateLabel(String label)
 {
+  _label = label;
+}
+
+void TimerOnChannel::setOn(boolean manual)
+{
+    _manual = manual;
   digitalWrite(_pin, HIGH);
   _isOn = true;
 }
 
-void TimerOnChannel::setOff()
+void TimerOnChannel::setOff(boolean manual)
 {
+  _manual = manual;
   digitalWrite(_pin, LOW);
   _isOn = false;
 }
@@ -36,9 +43,25 @@ int  TimerOnChannel::hourOff()
   return _hourOff;
 }
 
+int  TimerOnChannel::hourUltimateOff()
+{
+  return _hourUltimateOff;
+}
+
+
 boolean TimerOnChannel::isOn()
 {
   return _isOn;
+}
+
+boolean TimerOnChannel::isManuallyEnabled()
+{
+  return _manual;
+}
+
+void TimerOnChannel::restoreAuto()
+{
+  _manual = false;
 }
 
 void TimerOnChannel::printStatus()
@@ -49,22 +72,53 @@ void TimerOnChannel::printStatus()
   Serial.println("DAYS : "+ _dayPattern);
 }
 
-void TimerOnChannel::configure(int hourOn, int hourOff, String dayPattern) 
+void TimerOnChannel::configure(int hourOn, int hourOff, int hourUltimateOff, String dayPattern) 
 {
   _hourOn = hourOn;
   _hourOff = hourOff;
+  _hourUltimateOff = hourUltimateOff;
   _dayPattern = dayPattern;
+}
+
+void TimerOnChannel::adaptStateToConfigurationFor(long timeInMillis)
+{
+  if (isForesseenToBeActive(timeInMillis))
+  {
+    if (!isOn() && !_manual)
+      {
+          digitalWrite(_pin, HIGH);
+          _isOn = true;
+      }
+  } 
+  else 
+  {
+    if (isOn()) 
+      {
+        digitalWrite(_pin, LOW);
+        _isOn = false;
+        //Switch off and restore auto mode if after ultimate off!
+        if (getNbOfHours(timeInMillis) >= _hourUltimateOff){
+          _manual = false;
+        }
+      }
+  }   
 }
 
 boolean TimerOnChannel::isForesseenToBeActive(long timeInMillis)
 {
   int nbOfHours = getNbOfHours(timeInMillis);
-  return ( (nbOfHours >= _hourOn) &&  (nbOfHours <= _hourOff));
+  if (_manual)
+  {
+    return (nbOfHours < _hourUltimateOff);
+  } else 
+  {
+    return ((nbOfHours >= _hourOn) &&  (nbOfHours < _hourOff));  
+  }
 }
 
 int TimerOnChannel::getNbOfHours(long timeInMillis)
 {
-  return ((timeInMillis  % 86400L) / 3600);
+  return ((timeInMillis  % 86400L) / 3600) + 1; //TODO GMT+1 (GVA)
 }
 
 
