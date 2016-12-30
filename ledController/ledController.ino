@@ -14,8 +14,8 @@
 MDNSResponder mdns;
 ESP8266WebServer server(80);
 String webPage = "";
-const char* ssid = "a_r_o_2";
-const char* password = "Cern0wiec";
+const char* ssid = "****";
+const char* password = "*****";
 unsigned long acqEpochTimeFromService;
 unsigned long lastCheckTimestamp;
 unsigned long currentTime;
