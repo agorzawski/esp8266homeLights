@@ -143,7 +143,6 @@ void startHttpService()
     Serial.println("--= Re-Configuring channles: DONE =---");
     //TODO
     //saveFile(daysScheduled, hourOn, hourOff) ;
-    //update Timers objects!
     updateWebContentAndResponse();
   });
   server.begin();
@@ -343,12 +342,9 @@ void updateWebPageBody()
       webPage += "</fieldset>\n";
       ch++;
   }  
-  
   webPage += " </form>\n";
   webPage += " </div>\n";
   webPage += "</div>\n";
-  
-  //webPage += "<div style=\"font: arial;font-size: 12px;\"><p><iframe src=\"timer.conf\" width=200 height=400 frameborder=0 ></iframe></p></div>\n";  
   webPage += "</div>\n</body>\n</html>\n";
 }
 
