@@ -1,0 +1,123 @@
+
+<!DOCTYPE HTML>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HOME LIGHTS Arduino</title>
+<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
+ <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js" integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa" crossorigin="anonymous"></script>
+  <link rel="stylesheet" href="//code.jquery.com/ui/1.12.0/themes/base/jquery-ui.css">
+  <link rel="stylesheet" href="/resources/demos/style.css">
+  <script src="https://code.jquery.com/jquery-1.12.4.js"></script>
+  <script src="https://code.jquery.com/ui/1.12.0/jquery-ui.js"></script>
+<script>
+$( function() {
+   $( "input" ).checkboxradio();
+} );
+</script>
+<script>
+$( function() {
+   $( "#tabs" ).tabs();
+} );
+</script>
+</head>
+<body>
+<h1>Garden Lights v0.21 </h1>
+
+<div id="tabs">
+
+<ul>
+  <li><a href="#tabs-1">Control</a></li>
+  <li><a href="#tabs-2">Status</a></li>
+  <li><a href="#tabs-3">Config</a></li>
+</ul>
+
+<div id="tabs-1">
+<p>  <a href="socket1On"> <button class="btn btn-success btn-lg">ON Lights 1 </button></a></p>
+<p>  <a href="socket2On"> <button class="btn btn-success btn-lg">ON Lights 2 </button></a></p>
+<p>  <a href="socket3On"> <button class="btn btn-success btn-lg">ON Lights 3 </button></a></p>
+<p>
+  <a href="allOn">  <button class="btn btn-success btn-lg">ON ALL</button></a> &nbsp;
+  <a href="allOff">  <button class="btn btn-danger btn-lg">OFF ALL</button></a>
+</p>
+</div>
+<div id="tabs-2">
+UTC: 0:00:00
+ <p class="bg-danger">Lights 1 are OFF</p>
+ <p class="bg-danger">Lights 2 are OFF</p>
+ <p class="bg-danger">Lights 3 are OFF</p>
+</div>
+<div id="tabs-3">
+<form  action="ScheduleSave" method="get">
+<fieldset>
+  <legend>Automatic switch ON/OFF for CHANNEL 1:</legend>
+  <label for="ch-0-w-1">Mon</label>
+  <input type="checkbox" name="ch-0-w-1" id="ch-0-w-1" checked/>
+  <label for="ch-0-w-2">Tue</label>
+  <input type="checkbox" name="ch-0-w-2" id="ch-0-w-2" checked/>
+  <label for="ch-0-w-3">Wed</label>
+  <input type="checkbox" name="ch-0-w-3" id="ch-0-w-3" checked/>
+  <label for="ch-0-w-4">Thu</label>
+  <input type="checkbox" name="ch-0-w-4" id="ch-0-w-4" checked/>
+  <label for="ch-0-w-5">Fri</label>
+  <input type="checkbox" name="ch-0-w-5" id="ch-0-w-5" checked/>
+  <label for="ch-0-w-6">Sat</label>
+  <input type="checkbox" name="ch-0-w-6" id="ch-0-w-6" checked/>
+  <label for="ch-0-w-7">Sun</label>
+  <input type="checkbox" name="ch-0-w-7" id="ch-0-w-7" />
+  <label for="ch-0-startHour">Lights ON:</label>
+  <input id="ch-0-startHour" name="ch-0-startHour" value="0"/>
+  <label for="ch-0-endHour">Lights OFF:</label>
+  <input id="ch-0-endHour" name="ch-0-endHour" value="1"/>
+</fieldset>
+<fieldset>
+  <legend>Automatic switch ON/OFF for CHANNEL 2:</legend>
+  <label for="ch-1-w-1">Mon</label>
+  <input type="checkbox" name="ch-1-w-1" id="ch-1-w-1" checked/>
+  <label for="ch-1-w-2">Tue</label>
+  <input type="checkbox" name="ch-1-w-2" id="ch-1-w-2" checked/>
+  <label for="ch-1-w-3">Wed</label>
+  <input type="checkbox" name="ch-1-w-3" id="ch-1-w-3" checked/>
+  <label for="ch-1-w-4">Thu</label>
+  <input type="checkbox" name="ch-1-w-4" id="ch-1-w-4" checked/>
+  <label for="ch-1-w-5">Fri</label>
+  <input type="checkbox" name="ch-1-w-5" id="ch-1-w-5" checked/>
+  <label for="ch-1-w-6">Sat</label>
+  <input type="checkbox" name="ch-1-w-6" id="ch-1-w-6" checked/>
+  <label for="ch-1-w-7">Sun</label>
+  <input type="checkbox" name="ch-1-w-7" id="ch-1-w-7" />
+  <label for="ch-1-startHour">Lights ON:</label>
+  <input id="ch-1-startHour" name="ch-1-startHour" value="0"/>
+  <label for="ch-1-endHour">Lights OFF:</label>
+  <input id="ch-1-endHour" name="ch-1-endHour" value="1"/>
+</fieldset>
+<fieldset>
+  <legend>Automatic switch ON/OFF for CHANNEL 3:</legend>
+  <label for="ch-2-w-1">Mon</label>
+  <input type="checkbox" name="ch-2-w-1" id="ch-2-w-1" />
+  <label for="ch-2-w-2">Tue</label>
+  <input type="checkbox" name="ch-2-w-2" id="ch-2-w-2" />
+  <label for="ch-2-w-3">Wed</label>
+  <input type="checkbox" name="ch-2-w-3" id="ch-2-w-3" />
+  <label for="ch-2-w-4">Thu</label>
+  <input type="checkbox" name="ch-2-w-4" id="ch-2-w-4" />
+  <label for="ch-2-w-5">Fri</label>
+  <input type="checkbox" name="ch-2-w-5" id="ch-2-w-5" />
+  <label for="ch-2-w-6">Sat</label>
+  <input type="checkbox" name="ch-2-w-6" id="ch-2-w-6" checked/>
+  <label for="ch-2-w-7">Sun</label>
+  <input type="checkbox" name="ch-2-w-7" id="ch-2-w-7" checked/>
+  <label for="ch-2-startHour">Lights ON:</label>
+  <input id="ch-2-startHour" name="ch-2-startHour" value="0"/>
+  <label for="ch-2-endHour">Lights OFF:</label>
+  <input id="ch-2-endHour" name="ch-2-endHour" value="1"/>
+</fieldset>
+<fieldset>
+ <input type="submit" value="Save changes" class="btn btn-success btn-lg"/>
+ </fieldset>
+ </form>
+ </div>
+</div>
+</body>
+</html>
