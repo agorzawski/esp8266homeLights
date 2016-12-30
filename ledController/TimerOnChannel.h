@@ -8,8 +8,8 @@ class TimerOnChannel
     TimerOnChannel(int pin, String label);
     void configure(int hourOn, int hourOff, int hourUltimateOff, String dayPattern);   
     
-    void setOn(boolean manual);
-    void setOff(boolean manual);
+    void setOn();
+    void setOff();
     boolean isOn();    
     
     int hourOn();
@@ -19,7 +19,7 @@ class TimerOnChannel
     boolean isManuallyEnabled();
     void restoreAuto();
     
-    boolean isForesseenToBeActive(long timeInMillis);
+    boolean isForeseenToBeActive(long timeInMillis);
     void adaptStateToConfigurationFor(long timeInMillis);
     
     String getLabel();
@@ -31,10 +31,11 @@ class TimerOnChannel
     int _hourOn = -1;
     int _hourOff = -1;
     int _hourUltimateOff = -1;
-    boolean _isOn = false;
     String _dayPattern = "11111111";
     String _label = "Lights";
     boolean _manual = false;
+
+    boolean _isOn = false;
     
     static int getNbOfHours(long timeInMillis);
 };

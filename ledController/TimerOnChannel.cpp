@@ -5,7 +5,7 @@ TimerOnChannel::TimerOnChannel(int pin, String label)
 {
    _pin = pin;
    pinMode(pin, OUTPUT);
-   setOff(false);
+   digitalWrite(_pin, LOW);
    _label = label;
 }
 
@@ -19,16 +19,16 @@ void TimerOnChannel::updateLabel(String label)
   _label = label;
 }
 
-void TimerOnChannel::setOn(boolean manual)
+void TimerOnChannel::setOn()
 {
-    _manual = manual;
+  _manual = true;
   digitalWrite(_pin, HIGH);
   _isOn = true;
 }
 
-void TimerOnChannel::setOff(boolean manual)
+void TimerOnChannel::setOff()
 {
-  _manual = manual;
+  _manual = true;
   digitalWrite(_pin, LOW);
   _isOn = false;
 }
@@ -82,35 +82,40 @@ void TimerOnChannel::configure(int hourOn, int hourOff, int hourUltimateOff, Str
 
 void TimerOnChannel::adaptStateToConfigurationFor(long timeInMillis)
 {
-  if (isForesseenToBeActive(timeInMillis))
+  if (_hourOn == 0 && _hourOn == 0)
   {
-    if (!isOn() && !_manual)
-      {
+    return;  
+  }
+  if (isForeseenToBeActive(timeInMillis)) // sould be on
+  {
+    if (!isOn() && !_manual)  // off and auto
+    {
           digitalWrite(_pin, HIGH);
           _isOn = true;
-      }
+    }
   } 
-  else 
+  else // should be off
   {
-    if (isOn()) 
-      {
+    if (isOn() && !_manual) // on and auto
+    {
         digitalWrite(_pin, LOW);
         _isOn = false;
-        //Switch off and restore auto mode if after ultimate off!
-        if (getNbOfHours(timeInMillis) >= _hourUltimateOff){
+        // switch off and restore auto mode if after ultimate off!
+        if (getNbOfHours(timeInMillis) >= _hourUltimateOff)
+        {
           _manual = false;
         }
-      }
+    }
   }   
 }
 
-boolean TimerOnChannel::isForesseenToBeActive(long timeInMillis)
+boolean TimerOnChannel::isForeseenToBeActive(long timeInMillis)
 {
   int nbOfHours = getNbOfHours(timeInMillis);
   if (_manual)
   {
     return (nbOfHours < _hourUltimateOff);
-  } else 
+  } else // in auto mode
   {
     return ((nbOfHours >= _hourOn) &&  (nbOfHours < _hourOff));  
   }
@@ -121,4 +126,8 @@ int TimerOnChannel::getNbOfHours(long timeInMillis)
   return ((timeInMillis  % 86400L) / 3600) + 1; //TODO GMT+1 (GVA)
 }
 
+//int TimerOnChannel::getDayNumber(long timeInMillis)
+//{
+//  return dayOfMonth + ((month < 3) ? (int)((306 * month - 301) / 10) : (int)((306 * month - 913) / 10) + ((year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)) ? 60 : 59));
+//}
 

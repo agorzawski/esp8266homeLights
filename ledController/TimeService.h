@@ -13,12 +13,17 @@ class TimeService
   public:
     TimeService();    
     unsigned long getTime();
+    String getLastLog();
+    void init();
 
     static String timeToString(unsigned long epoch, int dst);
 
   private:
+    
     unsigned long sendNTPpacket(IPAddress& address);
     unsigned int localPort = 2390;      // local port to listen for UDP packets
+
+    String logFromConnection = "";
 
     IPAddress timeServerIP; // time.nist.gov NTP server address
     char* ntpServerName = "time.nist.gov";

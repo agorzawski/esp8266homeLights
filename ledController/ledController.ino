@@ -19,11 +19,12 @@ const char* password = "Cern0wiec";
 unsigned long acqEpochTimeFromService;
 unsigned long lastCheckTimestamp;
 unsigned long currentTime;
+TimeService timeService;
 
 //initial values;
 int hourOn[] =  {11, 17, 0, 0};
 int hourOff[] = {14, 24, 0, 0};
-int hourUltimateOff[] = {24, 14, 0, 0};
+int hourUltimateOff[] = {24, 24, 0, 0};
 String daysScheduled[] = {"0000111","01111110","00000011","00000011"};
 std::vector<TimerOnChannel> channels;
 
@@ -74,27 +75,31 @@ void startHttpService()
   server.on("/", []() {      
     updateWebContentAndResponse();
     });
-  server.on("/socket1On", []() { setOn(channels[0], true);});
-  server.on("/socket1Off", []() { setOff(channels[0], true);});
-  server.on("/socket1AutoOn", []() { channels[0].restoreAuto(); updateWebContentAndResponse();});
-  server.on("/socket2On", []() { setOn(channels[1], true);});
-  server.on("/socket2Off", []() { setOff(channels[1], true); });
-  server.on("/socket2AutoOn", []() { channels[1].restoreAuto(); updateWebContentAndResponse();});
-  server.on("/socket3On", []() { setOn(channels[2], true); });
-  server.on("/socket3Off", []() { setOff(channels[2], true); });   
-  server.on("/socket3AutoOn", []() { channels[2].restoreAuto(); updateWebContentAndResponse();}); 
-  server.on("/socket4On", []() { setOn(channels[3], true); });
-  server.on("/socket4Off", []() { setOff(channels[3], true); });    
-  server.on("/socket4AutoOn", []() { channels[3].restoreAuto(); updateWebContentAndResponse();});
+  server.on("/socket1On", []() { setOn(channels[0]); });
+  server.on("/socket1Off", []() { setOff(channels[0]); });
+  server.on("/socket1AutoOn", []() { setAuto(channels[0]); });
+  
+  server.on("/socket2On", []() { setOn(channels[1]); });
+  server.on("/socket2Off", []() { setOff(channels[1]); });
+  server.on("/socket2AutoOn", []() { setAuto(channels[1]); });
+  
+  server.on("/socket3On", []() { setOn(channels[2]); });
+  server.on("/socket3Off", []() { setOff(channels[2]); });   
+  server.on("/socket3AutoOn", []() { setAuto(channels[2]); }); 
+  
+  server.on("/socket4On", []() { setOn(channels[3]); });
+  server.on("/socket4Off", []() { setOff(channels[3]); });    
+  server.on("/socket4AutoOn", []() { setAuto(channels[3]); });
+  
   server.on("/allOn", []() {
     for (TimerOnChannel& channel : channels){
-      channel.setOn(true);
+      channel.setOn();
     }
     updateWebContentAndResponse();
   });
   server.on("/allOff", []() {
     for (TimerOnChannel& channel : channels){
-      channel.setOff(true);
+      channel.setOff();
     }
     updateWebContentAndResponse();
   });
@@ -102,10 +107,12 @@ void startHttpService()
     for (TimerOnChannel& channel : channels){
       channel.restoreAuto();
     }  
+    checkTimers();
     updateWebContentAndResponse();
   });
   server.on("/resetTime", []() {
     startTimeService();
+    checkTimers();
     updateWebContentAndResponse();
   });
   server.on("/ScheduleSave", HTTP_GET,  [](){
@@ -143,23 +150,28 @@ void startHttpService()
   Serial.println("---=== HTTP server started ===----");
 }
 
-void setOn(TimerOnChannel& channel, boolean manual)
+void setOn(TimerOnChannel& channel)
 {
-  channel.setOn(manual);
+  channel.setOn();
   updateWebContentAndResponse();
 }
 
-void setOff(TimerOnChannel& channel, boolean manual)
+void setOff(TimerOnChannel& channel)
 {
-  channel.setOff(manual);
+  channel.setOff();
   updateWebContentAndResponse();
 }
 
+void setAuto(TimerOnChannel& channel)
+{
+  channel.restoreAuto();
+  updateWebContentAndResponse();
+}
 
 void startTimeService()
 {
   Serial.println("---=== TIME SYSTEMS ===----");
-  TimeService timeService;
+  timeService.init();
   acqEpochTimeFromService = timeService.getTime();
   lastCheckTimestamp = acqEpochTimeFromService;
   Serial.println("---=== TIME SYSTEMS UP ===----");
@@ -219,9 +231,9 @@ void updateWebPageBody()
 
   webPage += "\n";
   webPage +=  "<ul class=\"nav nav-tabs\">";
-  webPage +=  "<li class=\"active\"><a data-toggle=\"tab\" href=\"#tabs-1\">Control</a></li>";
-  webPage += "<li><a data-toggle=\"tab\"  href=\"#tabs-2\">Status</a></li>";
-  webPage += " <li><a data-toggle=\"tab\" href=\"#tabs-3\">Config</a></li>\n </ul>\n";
+  webPage +=  "<li class=\"active\"><a data-toggle=\"tab\" href=\"#tabs-1\">Home</a></li>";
+  webPage += "<li><a data-toggle=\"tab\"  href=\"#tabs-2\">Status expert</a></li>";
+  webPage += " <li><a data-toggle=\"tab\" href=\"#tabs-3\">Configuration</a></li>\n </ul>\n";
   // Control
   webPage += "<div class=\"tab-content\">\n";
   webPage += "<div id=\"tabs-1\" class=\"tab-pane fade in active\">\n";
@@ -231,28 +243,40 @@ void updateWebPageBody()
   for (TimerOnChannel& channel : channels)
   {  
     webPage += "<p>  <div class=\"btn-group btn-group-justified\">";
+    String disabled = "";
+    if (channel.hourOn() == 0 && channel.hourOff() == 0 )
+    {
+      disabled = "disabled";
+    }
     if (channel.isOn())
     {
-      webPage += " <a href=\"socket"+String(i+1)+"Off\" class=\"btn btn-danger btn-sm\">OFF "+channel.getLabel()+" </a>";
+      webPage += " <a href=\"socket"+String(i+1)+"Off\" class=\"btn btn-danger btn-md "+disabled+"\"> <span class=\"badge\">OFF</span> "+channel.getLabel()+" </a>";
     } else {
-      webPage += " <a href=\"socket"+String(i+1)+"On\" class=\"btn btn-success btn-sm\">ON "+channel.getLabel()+" </a>";
+      webPage += " <a href=\"socket"+String(i+1)+"On\" class=\"btn btn-success btn-md "+disabled+"\"><span class=\"badge\">ON "+disabled+"</span> "+channel.getLabel()+" </a>";
     }
   
     if (channel.isManuallyEnabled())
     {
       countInManual++;
-      webPage += " <a href=\"socket"+String(i+1)+"AutoOn\" class=\"btn btn-warning btn-sm\">Restore auto control</a>";
+      webPage += " <a href=\"socket"+String(i+1)+"AutoOn\" class=\"btn btn-warning btn-md\">Restore automatic</a>";
     } else {
-      webPage += " <a href=\"\" class=\"btn btn-info btn-sm disabled\">Automatic control</a>";
+      webPage += " <a href=\"\" class=\"btn btn-info btn-md disabled\">Automatic, scheduled for";
+      if (channel.isForeseenToBeActive(acqEpochTimeFromService + millis()/1000))
+      {
+        webPage += " <span class=\"badge\"> ON </span>  </a>";
+      } else {
+        webPage += " <span class=\"badge\"> OFF </span>  </a>";
+      }
     }
 
     webPage += "</div></p> \n";
     i++;
   }
-  webPage += "<div class=\"btn-group btn-group-justified\"> <a href=\"allOn\" class=\"btn btn-success btn-lg\">ON ALL</a> <a href=\"allOff\" class=\"btn btn-danger btn-lg\">OFF ALL</a>";
+  webPage += "<div class=\"btn-group btn-group-justified\"> <a href=\"allOn\" class=\"btn btn-success btn-lg\"><span class=\"badge\">ON ALL</span></a>";
+  webPage += "<a href=\"allOff\" class=\"btn btn-danger btn-lg\"><span class=\"badge\">OFF ALL</span></a>";
   if (countInManual > 1)
   {
-    webPage += "<a href=\"allAutoOn\" class=\"btn btn-warning btn-lg\">AUTO ALL</a>";
+    webPage += "<a href=\"allAutoOn\" class=\"btn btn-warning btn-lg\">AUTO ALL <span class=\"badge\">"+String(countInManual)+"</span> </a>";
   }
   webPage +="</div>\n";
   webPage += "</div>\n";
@@ -260,6 +284,15 @@ void updateWebPageBody()
   webPage += "<div id=\"tabs-2\" class=\"tab-pane fade in\"><h3>Detailed status</h3>\n";
   webPage += "<button type=\"button\" class=\"btn btn-default btn-block disabled \"><small> System start: "+TimeService::timeToString(acqEpochTimeFromService, 1)+"</small></button>";  
   webPage += "<button type=\"button\" class=\"btn btn-default btn-block disabled \"><small> Last timer check: "+TimeService::timeToString(lastCheckTimestamp, 1)+"</small></button>";  
+  webPage += "<pre> " + timeService.getLastLog() + " </pre>\n";
+
+  long  fh = ESP.getFreeHeap();
+  char  fhc[20];
+  ltoa(fh, fhc, 10);
+  String freeHeap = String(fhc);
+  webPage += "<h3>Free memory</h3><samp>"+freeHeap+" kB</samp>";
+
+  webPage += "<h3>Inputs</h3>";
   i = 0;
   for (TimerOnChannel& channel : channels)
   {  
@@ -273,9 +306,12 @@ void updateWebPageBody()
   }
   webPage += "</div>\n";
   //Config
-  webPage += "<div id=\"tabs-3\" class=\"tab-pane fade in\">\n";
+  webPage += "<div id=\"tabs-3\" class=\"tab-pane fade in\"><h3>Times and days for channels</h3>\n";
   // form breaks the bootstrap/jquery style 
   webPage += "<form  action=\"ScheduleSave\" method=\"get\">\n";
+  webPage += "  <fieldset>\n";
+  webPage += "   <input type=\"submit\" value=\"Save changes\" class=\"btn btn-success btn-block\"/> \n";
+  webPage += "  </fieldset>\n";
   int ch = 0;
   for (TimerOnChannel& channel : channels){
       webPage += "<fieldset>\n";
@@ -306,13 +342,9 @@ void updateWebPageBody()
       
       webPage += "</fieldset>\n";
       ch++;
-  }
+  }  
   
-  webPage += "  <fieldset>\n";
-  webPage += "   <input type=\"submit\" value=\"Save changes\" class=\"btn btn-success btn-lg\"/> \n";
-  webPage += "  </fieldset>\n";  
   webPage += " </form>\n";
-  
   webPage += " </div>\n";
   webPage += "</div>\n";
   

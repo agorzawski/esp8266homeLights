@@ -4,17 +4,28 @@
 #define DST 1
 
 TimeService::TimeService(){
-  Serial.println("---=== Starting TimeService ===---");
-  Serial.println("-- Starting UDP");
+}
+
+void TimeService::init()
+{
+  logFromConnection = "";
+  logFromConnection += "---=== Starting TimeService ===---\n";
+  logFromConnection += "-- Starting UDP\n";
   udp.begin(localPort);
-  Serial.print("-- Local port: ");
-  Serial.println(udp.localPort());
+  logFromConnection += "-- Local port: ";
+  logFromConnection += String(udp.localPort())+"\n";
   unsigned long epochTime = TimeService::getTime();
-  Serial.print("-- Current time: ");
-  Serial.println(timeToString(epochTime, DST));
-  Serial.print("-- Internal clock for the reference: ");
-  Serial.println(millis());
-  Serial.println("---=== TimeService STARTED ===---");
+  logFromConnection += "-- Current time: \n";
+  logFromConnection += timeToString(epochTime, DST)+"\n";
+  logFromConnection += "-- Internal clock for the reference: ";
+  logFromConnection +=  String(millis())+"\n";
+  logFromConnection += "---=== TimeService STARTED ===---\n";
+  Serial.println(logFromConnection);
+}
+
+String TimeService::getLastLog()
+{
+  return logFromConnection;
 }
 
 unsigned long TimeService::getTime() {
@@ -27,11 +38,10 @@ unsigned long TimeService::getTime() {
   
   int cb = udp.parsePacket();
   if (!cb) {
-    Serial.println("-- No packet yet!, retrying...");
+    logFromConnection += "-- No packet yet!, retrying...\n";
   }
   else {
-    Serial.print("-- Packet received, length=");
-    Serial.println(cb);
+    logFromConnection += "-- Packet received!\n";
     // We've received a packet, read the data from it
     udp.read(packetBuffer, NTP_PACKET_SIZE); // read the packet into the buffer
 
@@ -43,18 +53,18 @@ unsigned long TimeService::getTime() {
     // combine the four bytes (two words) into a long integer
     // this is NTP time (seconds since Jan 1 1900):
     unsigned long secsSince1900 = highWord << 16 | lowWord;
-    Serial.print("-- Seconds since Jan 1 1900 = " );
-    Serial.println(secsSince1900);
+    logFromConnection += "-- Seconds since Jan 1 1900 = " ;
+    logFromConnection += String(secsSince1900) + "\n";
 
     // now convert NTP time into everyday time:
-    Serial.print("-- Unix time = ");
+    logFromConnection += "-- Unix time = ";
     // Unix time starts on Jan 1 1970. In seconds, that's 2208988800:
     const unsigned long seventyYears = 2208988800UL;
     // subtract seventy years:
     epoch = secsSince1900 - seventyYears;
     // print Unix time:
-    Serial.println(epoch);
-    Serial.println("-- " + timeToString(epoch, DST));
+    logFromConnection += String(epoch) + "\n";
+    logFromConnection += "-- " + timeToString(epoch, DST) + "\n";
   }
   return epoch;
 }
@@ -62,7 +72,7 @@ unsigned long TimeService::getTime() {
 // send an NTP request to the time server at the given address
 unsigned long TimeService::sendNTPpacket(IPAddress& address)
 {
-  Serial.println("-- Sending NTP packet...");
+  logFromConnection += "-- Sending NTP packet...\n";
   // set all bytes in the buffer to 0
   memset(packetBuffer, 0, NTP_PACKET_SIZE);
   // Initialize values needed to form NTP request
