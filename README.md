@@ -6,9 +6,11 @@ Main board:
 [https://www.wemos.cc/product/d1-mini.html](https://www.wemos.cc/product/d1-mini.html)
 
 Two channel pcb for 230V triac controlled relay:
+
 ![pcb](2chanelOptTiacPcb.jpg)
 
 WEB interface with :
+
 ![web](v023_main.jpg)
 
 Updated/Modified board can be found here:
